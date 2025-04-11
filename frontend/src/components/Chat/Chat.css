@@ -1,0 +1,94 @@
+:root {
+    --primary-color: #c3002f;
+    --secondary-color: #fff;
+    --background-color: #f4f7f9;
+    --user-message-bg: #4a90e2;
+    --bot-message-bg: #e2e2e2;
+    --user-message-color: #fff;
+    --bot-message-color: #333;
+    --border-radius: 10px;
+    --spacing: 15px;
+  }
+  
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 500vh;
+    max-height: 50vh;
+    width: 100%;
+    max-width: 600px;
+    margin: auto;
+    border: 1px solid #ddd;
+    background: var(--background-color);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+  }
+  
+  .chat-header {
+    padding: var(--spacing);
+    background: var(--primary-color);
+    color: #000000;
+    text-align: center;
+  }
+  
+  .chat-messages {
+    flex-grow: 1;
+    padding: var(--spacing);
+    overflow-y: auto;
+    background: var(--background-color);
+  }
+  
+  .chat-message {
+    max-width: 80%;
+    padding: var(--spacing);
+    margin-bottom: var(--spacing);
+    border-radius: var(--border-radius);
+    word-wrap: break-word;
+  }
+  
+  .chat-message.user {
+    margin-left: auto;
+    background: var(--user-message-bg);
+    color: var(--user-message-color);
+    text-align: right;
+  }
+  
+  .chat-message.bot {
+    margin-right: auto;
+    background: var(--bot-message-bg);
+    color: var(--bot-message-color);
+    text-align: left;
+  }
+  
+  .chat-input-container {
+    display: flex;
+    padding: var(--spacing);
+    background: #fff;
+    border-top: 1px solid #ddd;
+  }
+  
+  .chat-input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: var(--border-radius);
+    margin-right: 10px;
+    font-size: 16px;
+  }
+  
+  .chat-send-button {
+    padding: 10px 20px;
+    border: none;
+    background: #000000;
+    color: var(--secondary-color);
+    border-radius: var(--border-radius);
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+  
+  .chat-send-button:hover {
+    background: #c3002f;
+  }
+  

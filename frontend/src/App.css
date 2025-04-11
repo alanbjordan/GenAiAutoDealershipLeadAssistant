@@ -1,6 +1,13 @@
 .App {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* Ensures the parent takes up full viewport height */
+  margin: 0;     /* Optionally reset default margins if needed */
+  padding: 0;    /* Optionally reset default padding if needed */
+  background-color: #000000;
 }
+
 
 .App-logo {
   height: 40vmin;
