@@ -1,4 +1,6 @@
-# app.py Application Entry Point
+# This file is part of the Flask application for the project.
+
+# server/app.py
 
 # Importing necessary libraries
 from flask import g

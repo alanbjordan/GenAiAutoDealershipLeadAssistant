@@ -1,4 +1,4 @@
-# create_app.py
+# server/create_app.py
 
 # Importing necessary libraries
 from flask import Flask

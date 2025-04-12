@@ -1,7 +1,7 @@
 # This file defines the SQLAlchemy models for the car inventory system.
 # server/models/sql_models.py
 from datetime import datetime
-from database import db  
+from database import db,bcrypt  
 
 # Define the CarInventory model
 class CarInventory(db.Model):

@@ -1,4 +1,5 @@
-# config.py
+# This file is part of the Flask application configuration.
+# server/config.py
 
 # Importing necessary libraries
 import os

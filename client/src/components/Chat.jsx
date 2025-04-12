@@ -3,9 +3,14 @@ import ReactMarkdown from 'react-markdown';
 import apiClient from '../utils/api';
 import './Chat.css';
 
+// A simple function to generate a unique ID.
+const generateUniqueId = () => {
+  return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+};
+
 const Chat = () => {
   const [messages, setMessages] = useState([
-    { id: 1, sender: 'bot', text: 'Hello! How can I help you today?' }
+    { id: generateUniqueId(), sender: 'bot', text: 'Hello! How can I help you today?' }
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,17 +21,18 @@ const Chat = () => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
-    const newMessage = { id: messages.length + 1, sender: 'user', text: inputText };
-    setMessages(prev => [...prev, newMessage]);
+    const userMessage = { id: generateUniqueId(), sender: 'user', text: inputText };
+    setMessages(prev => [...prev, userMessage]);
 
     const userInput = inputText;
     setInputText('');
     setLoading(true);
 
     try {
-      // Include thread_id if available
-      const payload = threadId ? { message_content: userInput, thread_id: threadId }
-                               : { message_content: userInput };
+      // Include thread_id if available.
+      const payload = threadId 
+                      ? { message_content: userInput, thread_id: threadId }
+                      : { message_content: userInput };
 
       const response = await apiClient.post('/chat', payload);
       const { chat_response, thread_id } = response.data;
@@ -36,11 +42,15 @@ const Chat = () => {
         setThreadId(thread_id);
       }
 
-      const botMessage = { id: messages.length + 2, sender: 'bot', text: chat_response };
+      const botMessage = { id: generateUniqueId(), sender: 'bot', text: chat_response };
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
-      const errorMessage = { id: messages.length + 2, sender: 'bot', text: 'Sorry, something went wrong. Please try again later.' };
+      const errorMessage = { 
+        id: generateUniqueId(), 
+        sender: 'bot', 
+        text: 'Sorry, something went wrong. Please try again later.' 
+      };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);

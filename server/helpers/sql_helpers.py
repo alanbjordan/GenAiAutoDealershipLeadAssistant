@@ -1,5 +1,7 @@
-from models.sql_models import CarInventory
+import json
 from sqlalchemy import or_
+from flask import g
+from models.sql_models import CarInventory
 
 def search_car_inventory(search_query: str, filters: dict, limit: int):
     """
@@ -13,10 +15,13 @@ def search_car_inventory(search_query: str, filters: dict, limit: int):
     Returns:
       A list of matching CarInventory records.
     """
-    # Start with the base query.
-    query = CarInventory.query
+    # Use the session attached to Flask's global context.
+    session = g.session
 
-    # Apply filters as provided in the parameters.
+    # Start with a base query.
+    query = session.query(CarInventory)
+
+    # Apply each filter if provided.
     if filters.get("make"):
         query = query.filter(CarInventory.make == filters["make"])
     if filters.get("model"):
@@ -28,7 +33,7 @@ def search_car_inventory(search_query: str, filters: dict, limit: int):
     if filters.get("year"):
         query = query.filter(CarInventory.year == filters["year"])
 
-    # If a search query is provided, search within key textual columns.
+    # If a search_query is provided, search key textual columns.
     if search_query:
         like_pattern = f"%{search_query}%"
         query = query.filter(
