@@ -1,12 +1,9 @@
-import logo from './logo.svg';
 import './App.css';
-import Dashboard from './components/Dashboard'; // Example import; can be removed if not used
-import Chat from './components/Chat/Chat';
+import Chat from './components/Chat';
 
 function App() {
   return (
     <div className="App">
-      {/* Render the Chat component */}
       <Chat />
     </div>
   );
