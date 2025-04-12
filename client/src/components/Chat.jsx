@@ -10,6 +10,47 @@ const generateUniqueId = () => {
   return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 };
 
+// Function to get current time in EST
+const getCurrentTimeInEST = () => {
+  try {
+    // Create a date object for the current time
+    const now = new Date();
+    
+    // Format the date to EST timezone
+    // This uses the browser's timezone conversion capabilities
+    const options = { 
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    };
+    
+    // Format the date according to the options
+    const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+    
+    // Convert the formatted string to a more readable format
+    // The format will be MM/DD/YYYY, HH:MM:SS
+    const [datePart, timePart] = estDate.split(', ');
+    const [month, day, year] = datePart.split('/');
+    
+    // Return in the format YYYY-MM-DD HH:MM:SS EST
+    return `${year}-${month}-${day} ${timePart} EST`;
+  } catch (error) {
+    console.error("Error formatting EST time:", error);
+    // Fallback to a simpler approach if the Intl API fails
+    const now = new Date();
+    const estOffset = -5; // EST is UTC-5
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const est = new Date(utc + (3600000 * estOffset));
+    
+    return format(est, 'yyyy-MM-dd HH:mm:ss') + ' EST';
+  }
+};
+
 const TypingIndicator = () => (
   <div className="typing-indicator">
     <span></span>
@@ -64,12 +105,20 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      // Convert messages to the format expected by the backend
-      const formattedHistory = messages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }));
-
+      // Use the stored conversation history if available, otherwise create a new one
+      let formattedHistory = conversationHistory.length > 0 
+        ? [...conversationHistory] 
+        : [];
+      
+      // Get current time in EST
+      const currentTime = getCurrentTimeInEST();
+      
+      // Add the current time context message
+      formattedHistory.push({
+        role: "system",
+        content: `Current time: ${currentTime}`
+      });
+      
       // Add the current message to the history
       formattedHistory.push({
         role: 'user',
@@ -83,8 +132,8 @@ const Chat = () => {
 
       const response = await apiClient.post('/chat', payload);
       const { chat_response, conversation_history: updatedHistory } = response.data;
-
-      // Update the conversation history from the server
+      
+      // Store the updated conversation history
       setConversationHistory(updatedHistory);
 
       const botMessage = { 

@@ -6,7 +6,7 @@
 from flask import g
 from create_app import create_app
 from database.session import ScopedSession
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 
@@ -19,7 +19,7 @@ app = create_app()
 
 # Global session handling
 def log_with_timing(prev_time, message):
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     elapsed = (current_time - prev_time).total_seconds() if prev_time else 0
     print(f"[{current_time.isoformat()}] {message} (Elapsed: {elapsed:.4f}s)")
     return current_time
