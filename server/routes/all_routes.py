@@ -2,11 +2,11 @@ import os
 import json
 import traceback
 from flask import Blueprint, request, jsonify
-from openai import OpenAI  # New import style
+from openai import OpenAI 
 from helpers.cors_helpers import pre_authorized_cors_preflight
-from models.sql_models import CarInventory  # Ensure your car model is imported
+from models.sql_models import CarInventory 
 from database import db
-from helpers.llm_utils import fetch_cars  # Import the fetch_cars function
+from helpers.llm_utils import fetch_cars 
 
 # Initialize the OpenAI client using the new syntax
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -113,9 +113,30 @@ def chat():
             system_message = {
                 "role": "system",
                 "content": (
-                    "You are a car sales agent named Patrica. "
-                    "Help users with car inventory queries and use function calling if you need to fetch car details. "
-                    "Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields."
+                    """ 
+                    You are Patricia, a knowledgeable and friendly car sales agent at Nissan of Hendersonville, a family-owned and operated Nissan dealership in Hendersonville, North Carolina.
+                    
+                    Your primary responsibilities:
+                    - Help customers find the perfect Nissan vehicle that meets their needs and budget
+                    - Provide accurate information about Nissan models, features, pricing, and availability
+                    - Assist with scheduling test drives and answering questions about the car buying process
+                    - Represent the dealership with professionalism and enthusiasm
+                    
+                    Company Information:
+                    - Name: Nissan of Hendersonville
+                    - Address: 1340 Spartanburg Hwy, Hendersonville, NC 28792
+                    - Phone: +1 (828) 697-2222
+                    - Website: https://www.nissanofhendersonville.com
+                    
+                    Business Hours:
+                    - Monday-Friday: 7 AM - 6 PM
+                    - Saturday: 7 AM - 6 PM
+                    - Sunday: Closed
+                    
+                    When customers ask about inventory, use the fetch_cars function to provide accurate, up-to-date information. Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields.
+                    
+                    Remember that you are representing a family-owned business that prides itself on customer service and helping customers find the perfect car. Be helpful, friendly, and professional in all interactions.
+                    """
                 )
             }
             conversation_history.append(system_message)
@@ -123,7 +144,7 @@ def chat():
 
         # Call ChatCompletion API using the new tools syntax
         completion = client.chat.completions.create(
-            model="gpt-4",
+            model="o3-mini-2025-01-31",
             messages=conversation_history,
             tools=tools
         )
@@ -148,14 +169,17 @@ def chat():
                 if func_name == "fetch_cars":
                     result = fetch_cars(func_args)
                     print("DEBUG: fetch_cars result:", result)
-                    conversation_history.append({
-                        "role": "function",
-                        "name": "fetch_cars",
-                        "content": json.dumps(result)
-                    })
+                    
+                    # Add the result as an assistant message
+                    result_message = {
+                        "role": "assistant",
+                        "content": f"Here are the car details I found: {json.dumps(result)}"
+                    }
+                    conversation_history.append(result_message)
+                    
                     print("DEBUG: Updated conversation history after tool call:", conversation_history)
                     completion = client.chat.completions.create(
-                        model="gpt-4",
+                        model="o3-mini-2025-01-31",
                         messages=conversation_history
                     )
                     message = completion.choices[0].message
@@ -169,18 +193,10 @@ def chat():
             print("DEBUG: No tool call detected. Assistant response:", assistant_response)
 
         # Append the assistant's response to the conversation history
+        # Remove the tool_calls from the message to avoid the error
         conversation_history.append({
             "role": "assistant",
-            "content": assistant_response,
-            "tool_calls": [
-                {
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments
-                    },
-                    "type": tc.type
-                } for tc in message.tool_calls
-            ] if message.tool_calls else None
+            "content": assistant_response
         })
         print("DEBUG: Final conversation history:", conversation_history)
 
