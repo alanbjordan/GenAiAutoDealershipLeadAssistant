@@ -150,18 +150,59 @@ def chat():
                 NEVER schedule appointments for days when the dealership is closed (like Sundays).
                 NEVER provide information about test drives without verifying the customer's contact information first.
                 NEVER make up information about the dealership or its staff.
+                
+                IMPORTANT - Time Awareness:
+                You will receive a message with the current time in EST. Use this information to:
+                1. Determine if the dealership is currently open or closed
+                2. Avoid scheduling appointments outside of business hours
+                3. Provide accurate information about when the dealership will be open next
+                4. Consider the day of the week when discussing availability
                 """
             )
         }
         
         # Check if the conversation history already has a system message
-        has_system_message = any(msg.get("role") == "system" for msg in conversation_history)
+        has_system_message = any(msg.get("role") == "system" and "You are Patricia" in msg.get("content", "") for msg in conversation_history)
         
         # If no conversation history or no system message, add the system message
         if not conversation_history or not has_system_message:
             # Insert the system message at the beginning of the conversation history
             conversation_history.insert(0, system_message)
             print("DEBUG: Added system message to conversation history.")
+            
+        # Check if there's a time context message in the conversation history
+        has_time_context = any(msg.get("role") == "system" and "Current time:" in msg.get("content", "") for msg in conversation_history)
+        
+        # If no time context message, add one
+        if not has_time_context:
+            # Get current time in EST using a reliable method
+            try:
+                from datetime import datetime
+                import pytz
+                
+                # Get current time in EST
+                est = pytz.timezone('US/Eastern')
+                current_time = datetime.now(est)
+                current_time_formatted = current_time.strftime('%Y-%m-%d %H:%M:%S EST')
+                print(f"DEBUG: Successfully got time in EST: {current_time_formatted}")
+            except Exception as e:
+                print(f"DEBUG: Error getting time in EST: {e}")
+                # Fallback to a simpler approach
+                from datetime import datetime, timedelta
+                # EST is UTC-5
+                utc_now = datetime.utcnow()
+                est_offset = timedelta(hours=-5)
+                est_time = utc_now + est_offset
+                current_time_formatted = est_time.strftime('%Y-%m-%d %H:%M:%S EST')
+                print(f"DEBUG: Using fallback time calculation: {current_time_formatted}")
+            
+            # Add time context message
+            time_context_message = {
+                "role": "system",
+                "content": f"Current time: {current_time_formatted}"
+            }
+            conversation_history.append(time_context_message)
+            print("DEBUG: Added time context message to conversation history.")
 
         # Call ChatCompletion API using the new tools syntax
         completion = client.chat.completions.create(
