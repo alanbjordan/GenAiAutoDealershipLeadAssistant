@@ -31,6 +31,7 @@ const Chat = () => {
   const [loading, setLoading] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,6 +40,12 @@ const Chat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (!loading && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [loading]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -139,6 +146,7 @@ const Chat = () => {
       </div>
       <form className="chat-input-container" onSubmit={handleSend}>
         <input
+          ref={inputRef}
           type="text"
           placeholder="Type your message here..."
           value={inputText}
