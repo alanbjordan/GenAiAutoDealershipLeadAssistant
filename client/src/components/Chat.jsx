@@ -1,34 +1,51 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import apiClient from '../utils/api'; // Adjust the import path as necessary
 import './Chat.css';
 
 const Chat = () => {
-  // Sample initial message from the bot
+  // The initial state contains an initial greeting from the bot.
   const [messages, setMessages] = useState([
     { id: 1, sender: 'bot', text: 'Hello! How can I help you today?' }
   ]);
   const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // Handle sending a new message
-  const handleSend = (e) => {
+  // Function to send a message to the server and update chat with the bot response
+  const handleSend = async (e) => {
     e.preventDefault();
+    
+    // Do nothing if the input field is empty or just whitespace.
     if (!inputText.trim()) return;
 
-    // Append new user message
-    const newMessage = {
-      id: messages.length + 1,
-      sender: 'user',
-      text: inputText
-    };
-    setMessages([...messages, newMessage]);
-    setInputText('');
+    // Append the user message to the chat state
+    const userMessage = { id: messages.length + 1, sender: 'user', text: inputText };
+    setMessages(prevMessages => [...prevMessages, userMessage]);
 
-    // (Optional) Simulate a bot response after a slight delay
-    setTimeout(() => {
-      setMessages((msgs) => [
-        ...msgs,
-        { id: msgs.length + 1, sender: 'bot', text: 'Thanks for your message!' }
-      ]);
-    }, 500);
+    // Preserve the current user input and reset the input field
+    const userInput = inputText;
+    setInputText('');
+    setLoading(true);
+
+    try {
+      // Call the chat endpoint on your server, sending the user's message in the body
+      const response = await apiClient.post('/chat', { message_content: userInput });
+      
+      // Extract the chat response from the server response (ensure your server's response contains this property)
+      const botMessageText = response.data.chat_response;
+      
+      // Append the bot's response to the chat messages
+      const botMessage = { id: messages.length + 2, sender: 'bot', text: botMessageText };
+      setMessages(prevMessages => [...prevMessages, botMessage]);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // Provide an error message in the chat if the request fails
+      const errorMessage = { id: messages.length + 2, sender: 'bot', text: 'Sorry, something went wrong. Please try again later.' };
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    } finally {
+      // Reset the loading state
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,7 +59,8 @@ const Chat = () => {
             key={msg.id}
             className={`chat-message ${msg.sender === 'user' ? 'user' : 'bot'}`}
           >
-            <p>{msg.text}</p>
+            {/* Render message text as Markdown */}
+            <ReactMarkdown>{msg.text}</ReactMarkdown>
           </div>
         ))}
       </div>
@@ -53,9 +71,10 @@ const Chat = () => {
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           className="chat-input"
+          disabled={loading}
         />
-        <button type="submit" className="chat-send-button">
-          Send
+        <button type="submit" className="chat-send-button" disabled={loading}>
+          {loading ? 'Sending...' : 'Send'}
         </button>
       </form>
     </div>

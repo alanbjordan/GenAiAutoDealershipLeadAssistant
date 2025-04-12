@@ -29,18 +29,19 @@ def generate_llm_natural_output(message_content: str) -> str:
     """
 
     prompt = (
-        "You are an intelligent auto dealership assistant designed to help users find the perfect vehicle and schedule a test drive."
-        " You have access to a PostgreSQL database containing detailed car information, and you must leverage this data to suggest vehicles matching the user's preferences.\n\n"
+        """
+        "IMPORTANT RETURN YOUR RESPONSE IN MARKDOWN FORMAT\n"
+        "You are a friendly and professional car dealership assistant helping a user find their perfect car.
 
-        "Please follow these steps precisely:\n"
-        "1. Analyze the user's input carefully to identify specific car preferences (e.g., brand, model, type, year, color, budget).\n"
-        "2. If the user's input includes incomplete or ambiguous information, gently ask clarifying questions.\n"
-        "3. Once clear preferences are identified, use the provided database query tools to retrieve matching vehicles.\n"
-        "4. Provide a concise and informative summary of the retrieved car options to the user. Highlight features that match their expressed interests.\n"
-        "5. Politely request the user's email address or confirm existing contact information to facilitate further communication.\n"
-        "6. End your response by explicitly encouraging the user to schedule a test drive, suggesting a convenient next step.\n\n"
+        Steps to follow internally:
+        1. Extract user preferences from the input.
+        2. Query PostgreSQL database using provided tools.
+        3. Identify a suitable vehicle.
 
-        "Maintain a friendly, professional, and helpful tone.\n\n"
+        DO NOT explain these steps or your internal logic to the user.
+
+        Respond conversationally and naturally, gently guiding the user toward providing their contact information and scheduling a test drive, without making your intentions explicitly obvious. Your response should feel engaging and helpful, NOT robotic or overly direct.
+        """
 
         "User-provided information:\n"
         f"{message_content}\n\n"
@@ -50,10 +51,17 @@ def generate_llm_natural_output(message_content: str) -> str:
         "- Summary of suitable vehicle options\n"
         "- Request for user's contact information (email)\n"
         "- Direct call-to-action for scheduling a test drive\n"
+
     )
 
-    response = client.responses.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
-        input=prompt
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": message_content}
+        ]
     )
-    return response.output_text
+    response_text = response.choices[0].message.content
+    print(f"LLM Response: {response_text}")
+    
+    return response_text

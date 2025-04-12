@@ -1,13 +1,14 @@
 // src/utils/api.js
 import axios from 'axios';
 
-// Default to the Heroku deployment URL
-const DEFAULT_API_URL = process.env.REACT_APP_API_URL || 'https://student-success-15b4e9507355.herokuapp.com/api';
+// Use local development server URL until deployment
+// const DEFAULT_API_URL = process.env.REACT_APP_API_URL || 'https://student-success-15b4e9507355.herokuapp.com/api';
+const DEFAULT_API_URL = 'http://localhost:5000/api';
 
-// Backup API URL (local development server)
+// Backup API URL is the same as the default when working locally.
 const BACKUP_API_URL = 'http://localhost:5000/api';
 
-// Create the axios instance with the default (deployment) base URL
+// Create the axios instance with the default (local development) base URL
 const apiClient = axios.create({
   baseURL: DEFAULT_API_URL,
   headers: {
@@ -17,7 +18,7 @@ const apiClient = axios.create({
 
 // Add an interceptor to handle errors and retry with the backup URL if needed
 apiClient.interceptors.response.use(
-  response => response, // pass through successful responses
+  response => response, // Pass through successful responses
   async error => {
     // Check if error is network-related (server unreachable)
     if (
