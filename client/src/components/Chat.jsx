@@ -1,49 +1,48 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import apiClient from '../utils/api'; // Adjust the import path as necessary
+import apiClient from '../utils/api';
 import './Chat.css';
 
 const Chat = () => {
-  // The initial state contains an initial greeting from the bot.
   const [messages, setMessages] = useState([
     { id: 1, sender: 'bot', text: 'Hello! How can I help you today?' }
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  // Store the thread id once received from the server.
+  const [threadId, setThreadId] = useState(null);
 
-  // Function to send a message to the server and update chat with the bot response
   const handleSend = async (e) => {
     e.preventDefault();
-    
-    // Do nothing if the input field is empty or just whitespace.
     if (!inputText.trim()) return;
 
-    // Append the user message to the chat state
-    const userMessage = { id: messages.length + 1, sender: 'user', text: inputText };
-    setMessages(prevMessages => [...prevMessages, userMessage]);
+    const newMessage = { id: messages.length + 1, sender: 'user', text: inputText };
+    setMessages(prev => [...prev, newMessage]);
 
-    // Preserve the current user input and reset the input field
     const userInput = inputText;
     setInputText('');
     setLoading(true);
 
     try {
-      // Call the chat endpoint on your server, sending the user's message in the body
-      const response = await apiClient.post('/chat', { message_content: userInput });
-      
-      // Extract the chat response from the server response (ensure your server's response contains this property)
-      const botMessageText = response.data.chat_response;
-      
-      // Append the bot's response to the chat messages
-      const botMessage = { id: messages.length + 2, sender: 'bot', text: botMessageText };
-      setMessages(prevMessages => [...prevMessages, botMessage]);
+      // Include thread_id if available
+      const payload = threadId ? { message_content: userInput, thread_id: threadId }
+                               : { message_content: userInput };
+
+      const response = await apiClient.post('/chat', payload);
+      const { chat_response, thread_id } = response.data;
+
+      // Store the thread_id from the response if available.
+      if (thread_id) {
+        setThreadId(thread_id);
+      }
+
+      const botMessage = { id: messages.length + 2, sender: 'bot', text: chat_response };
+      setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
-      // Provide an error message in the chat if the request fails
       const errorMessage = { id: messages.length + 2, sender: 'bot', text: 'Sorry, something went wrong. Please try again later.' };
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
-      // Reset the loading state
       setLoading(false);
     }
   };
@@ -54,12 +53,8 @@ const Chat = () => {
         <h2>Nissan of Hendersonville Chat</h2>
       </div>
       <div className="chat-messages">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`chat-message ${msg.sender === 'user' ? 'user' : 'bot'}`}
-          >
-            {/* Render message text as Markdown */}
+        {messages.map(msg => (
+          <div key={msg.id} className={`chat-message ${msg.sender === 'user' ? 'user' : 'bot'}`}>
             <ReactMarkdown>{msg.text}</ReactMarkdown>
           </div>
         ))}
@@ -70,10 +65,10 @@ const Chat = () => {
           placeholder="Type your message here..."
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          className="chat-input"
           disabled={loading}
+          className="chat-input"
         />
-        <button type="submit" className="chat-send-button" disabled={loading}>
+        <button type="submit" disabled={loading} className="chat-send-button">
           {loading ? 'Sending...' : 'Send'}
         </button>
       </form>
