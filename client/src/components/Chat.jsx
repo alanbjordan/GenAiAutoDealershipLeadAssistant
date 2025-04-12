@@ -29,6 +29,7 @@ const Chat = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -63,12 +64,11 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      // Convert messages to the format expected by the backend
-      const formattedHistory = messages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }));
-
+      // Use the stored conversation history if available, otherwise create a new one
+      let formattedHistory = conversationHistory.length > 0 
+        ? [...conversationHistory] 
+        : [];
+      
       // Add the current message to the history
       formattedHistory.push({
         role: 'user',
@@ -81,7 +81,10 @@ const Chat = () => {
       };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response } = response.data;
+      const { chat_response, conversation_history: updatedHistory } = response.data;
+      
+      // Store the updated conversation history
+      setConversationHistory(updatedHistory);
 
       const botMessage = { 
         id: generateUniqueId(), 
