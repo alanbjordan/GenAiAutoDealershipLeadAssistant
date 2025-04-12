@@ -14,8 +14,7 @@ const Chat = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
-  // Store the thread id once received from the server.
-  const [threadId, setThreadId] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -29,18 +28,28 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      // Include thread_id if available.
-      const payload = threadId 
-                      ? { message_content: userInput, thread_id: threadId }
-                      : { message_content: userInput };
+      // Convert messages to the format expected by the backend
+      const formattedHistory = messages.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      }));
+
+      // Add the current message to the history
+      formattedHistory.push({
+        role: 'user',
+        content: userInput
+      });
+
+      const payload = {
+        message: userInput,
+        conversation_history: formattedHistory
+      };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response, thread_id } = response.data;
+      const { chat_response, conversation_history: updatedHistory } = response.data;
 
-      // Store the thread_id from the response if available.
-      if (thread_id) {
-        setThreadId(thread_id);
-      }
+      // Update the conversation history from the server
+      setConversationHistory(updatedHistory);
 
       const botMessage = { id: generateUniqueId(), sender: 'bot', text: chat_response };
       setMessages(prev => [...prev, botMessage]);
