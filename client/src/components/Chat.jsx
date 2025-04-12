@@ -29,7 +29,6 @@ const Chat = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -82,10 +81,7 @@ const Chat = () => {
       };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response, conversation_history: updatedHistory } = response.data;
-
-      // Update the conversation history from the server
-      setConversationHistory(updatedHistory);
+      const { chat_response } = response.data;
 
       const botMessage = { 
         id: generateUniqueId(), 
