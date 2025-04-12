@@ -96,11 +96,10 @@ def chat():
         if not data:
             return jsonify({"error": "Missing JSON body"}), 400
 
-        # Try to get 'message' or fallback to 'message_content'
-        user_message = data.get("message") or data.get("message_content", "")
-        user_message = user_message.strip()
-
+        # Get the user message and conversation history
+        user_message = data.get("message", "").strip()
         conversation_history = data.get("conversation_history", [])
+        
         if not isinstance(conversation_history, list):
             conversation_history = []
 
@@ -111,21 +110,20 @@ def chat():
 
         # If no conversation history, add a system message to define the assistant's identity
         if not conversation_history:
-            system_message = (
-                "You are a car sales agent named Patrica. "
-                "Help users with car inventory queries and use function calling if you need to fetch car details. "
-                "Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields."
-            )
-            conversation_history.append({"role": "system", "content": system_message})
+            system_message = {
+                "role": "system",
+                "content": (
+                    "You are a car sales agent named Patrica. "
+                    "Help users with car inventory queries and use function calling if you need to fetch car details. "
+                    "Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields."
+                )
+            }
+            conversation_history.append(system_message)
             print("DEBUG: Added system message to conversation history.")
-
-        # Append the new user message
-        conversation_history.append({"role": "user", "content": user_message})
-        print("DEBUG: Appended user message:", user_message)
 
         # Call ChatCompletion API using the new tools syntax
         completion = client.chat.completions.create(
-            model="o1-2024-12-17",
+            model="gpt-4",
             messages=conversation_history,
             tools=tools
         )
@@ -157,7 +155,7 @@ def chat():
                     })
                     print("DEBUG: Updated conversation history after tool call:", conversation_history)
                     completion = client.chat.completions.create(
-                        model="gpt-4o",
+                        model="gpt-4",
                         messages=conversation_history
                     )
                     message = completion.choices[0].message
@@ -170,10 +168,10 @@ def chat():
             assistant_response = message.content or ""
             print("DEBUG: No tool call detected. Assistant response:", assistant_response)
 
-        # Append final message to conversation history
+        # Append the assistant's response to the conversation history
         conversation_history.append({
-            "role": message.role,
-            "content": message.content,
+            "role": "assistant",
+            "content": assistant_response,
             "tool_calls": [
                 {
                     "function": {
