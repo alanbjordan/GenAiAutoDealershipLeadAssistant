@@ -135,11 +135,8 @@ const Chat = () => {
   const [loading, setLoading] = useState(false);
   const [toolCallInProgress, setToolCallInProgress] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [conversationId, setConversationId] = useState(null);
   const [summary, setSummary] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
-  const [summaryGenerated, setSummaryGenerated] = useState(false);
-  const [inactivityTimer, setInactivityTimer] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -156,79 +153,6 @@ const Chat = () => {
       inputRef.current.focus();
     }
   }, [loading, toolCallInProgress]);
-
-  // Reset inactivity timer on user activity
-  useEffect(() => {
-    const resetTimer = () => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-      }
-      
-      // Only set a new timer if a summary hasn't been generated yet
-      if (!summaryGenerated) {
-        // Set a new timer for 5 minutes of inactivity
-        const timer = setTimeout(() => {
-          generateSummary();
-        }, 5 * 60 * 1000); // 5 minutes
-        
-        setInactivityTimer(timer);
-      }
-    };
-    
-    // Add event listeners for user activity
-    window.addEventListener('mousemove', resetTimer);
-    window.addEventListener('keydown', resetTimer);
-    window.addEventListener('click', resetTimer);
-    
-    // Initial timer setup
-    resetTimer();
-    
-    // Cleanup
-    return () => {
-      window.removeEventListener('mousemove', resetTimer);
-      window.removeEventListener('keydown', resetTimer);
-      window.removeEventListener('click', resetTimer);
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-      }
-    };
-  }, [inactivityTimer, summaryGenerated]);
-
-  // Function to generate a summary
-  const generateSummary = async () => {
-    // Don't generate if too short, already exists, or has already been generated
-    if (conversationHistory.length < 2 || summary || summaryGenerated) return;
-    
-    try {
-      setLoading(true);
-      
-      const response = await apiClient.post('/generate-summary', {
-        conversation_history: conversationHistory,
-        conversation_id: conversationId
-      });
-      
-      const { summary: newSummary } = response.data;
-      
-      // Update the conversation ID if it was generated
-      if (newSummary.conversation_id) {
-        setConversationId(newSummary.conversation_id);
-      }
-      
-      setSummary(newSummary);
-      setShowSummary(true);
-      setSummaryGenerated(true); // Mark that a summary has been generated
-      
-      // Clear the inactivity timer since we've generated a summary
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-        setInactivityTimer(null);
-      }
-    } catch (error) {
-      console.error("Error generating summary:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -273,7 +197,7 @@ const Chat = () => {
       };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response, conversation_history: updatedHistory, tool_call_detected } = response.data;
+      const { chat_response, conversation_history: updatedHistory, tool_call_detected, summary: newSummary } = response.data;
       
       // Store the updated conversation history
       setConversationHistory(updatedHistory);
@@ -298,7 +222,7 @@ const Chat = () => {
         });
         
         // Get the final response after the tool call
-        const { final_response, final_conversation_history } = toolCallResponse.data;
+        const { final_response, final_conversation_history, summary: toolCallSummary } = toolCallResponse.data;
         
         // Update the conversation history
         setConversationHistory(final_conversation_history);
@@ -314,6 +238,12 @@ const Chat = () => {
         
         // Reset the tool call in progress state
         setToolCallInProgress(false);
+        
+        // Check if a summary was generated
+        if (toolCallSummary) {
+          setSummary(toolCallSummary);
+          setShowSummary(true);
+        }
       } else {
         // No tool call, just add the response as a message
         const botMessage = { 
@@ -323,18 +253,12 @@ const Chat = () => {
           timestamp: new Date()
         };
         setMessages(prev => [...prev, botMessage]);
-      }
-      
-      // Check if the user's message indicates the end of the conversation
-      const endPhrases = ['goodbye', 'bye', 'thank you', 'thanks', 'end chat', 'end conversation'];
-      const isEnding = endPhrases.some(phrase => 
-        userInput.toLowerCase().includes(phrase)
-      );
-      
-      if (isEnding && !summaryGenerated) {
-        // Generate a summary when the conversation appears to be ending
-        // Only if a summary hasn't been generated yet
-        generateSummary();
+        
+        // Check if a summary was generated
+        if (newSummary) {
+          setSummary(newSummary);
+          setShowSummary(true);
+        }
       }
     } catch (error) {
       console.error("Error sending message:", error);

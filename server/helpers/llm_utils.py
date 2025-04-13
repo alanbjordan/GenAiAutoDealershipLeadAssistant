@@ -236,3 +236,38 @@ def get_conversation_summary(conversation_id: str) -> dict:
     except Exception as e:
         print(f"Error retrieving summary from database: {e}")
         return None
+
+def detect_end_of_conversation(conversation_history: list) -> bool:
+    """
+    Analyze the conversation history to detect if the conversation has ended.
+    
+    This function looks for explicit end-of-conversation signals in the most recent messages.
+    
+    :param conversation_history: List of message objects in the conversation
+    :return: True if the conversation appears to have ended, False otherwise
+    """
+    # We need at least a few messages to determine if the conversation has ended
+    if len(conversation_history) < 3:
+        return False
+    
+    # Get the last few messages (up to 5) to analyze
+    recent_messages = conversation_history[-5:]
+    
+    # Look for end-of-conversation signals in the assistant's messages
+    for msg in reversed(recent_messages):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "").lower()
+            
+            # Check for explicit end-of-conversation phrases
+            end_phrases = [
+                "goodbye", "bye", "thank you for chatting", "have a great day",
+                "is there anything else", "anything else i can help", "end of conversation",
+                "conversation is complete", "conversation has ended", "wrapping up",
+                "summarizing our conversation", "conversation summary"
+            ]
+            
+            # Check if any of the end phrases are in the message
+            if any(phrase in content for phrase in end_phrases):
+                return True
+    
+    return False
