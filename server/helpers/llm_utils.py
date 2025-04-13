@@ -266,3 +266,69 @@ def detect_end_of_conversation(conversation_history: list) -> bool:
                 return True
     
     return False
+
+def find_car_review_videos(car_make: str, car_model: str, year: int = None) -> dict:
+    """
+    Search for car review videos on YouTube based on make, model, and optionally year.
+    
+    :param car_make: The make of the car (e.g., "Toyota")
+    :param car_model: The model of the car (e.g., "Camry")
+    :param year: Optional year of the car model
+    :return: A dictionary containing video information or error
+    """
+    try:
+        from googleapiclient.discovery import build
+        import os
+        
+        # Get API key from environment variable
+        api_key = os.getenv("YOUTUBE_API_KEY")
+        print(f"DEBUG: YouTube API Key found: {'Yes' if api_key else 'No'}")
+        
+        if not api_key:
+            print("DEBUG: YouTube API key not configured in environment variables")
+            return {"videos": [], "error": "YouTube API key not configured. Please set the YOUTUBE_API_KEY environment variable."}
+        
+        # Create YouTube API client
+        youtube = build('youtube', 'v3', developerKey=api_key)
+        
+        # Construct search query
+        search_query = f"{car_make} {car_model}"
+        if year:
+            search_query += f" {year}"
+        search_query += " review"
+        
+        print(f"DEBUG: Searching YouTube with query: {search_query}")
+        
+        # Execute search request
+        search_response = youtube.search().list(
+            q=search_query,
+            part='id,snippet',
+            maxResults=5,
+            type='video',
+            videoCategoryId='28',  # Category ID for "Autos & Vehicles"
+            relevanceLanguage='en'
+        ).execute()
+        
+        # Extract video information
+        videos = []
+        for item in search_response.get('items', []):
+            video_id = item['id']['videoId']
+            title = item['snippet']['title']
+            description = item['snippet']['description']
+            thumbnail = item['snippet']['thumbnails']['high']['url']
+            
+            videos.append({
+                'id': video_id,
+                'title': title,
+                'description': description,
+                'thumbnail': thumbnail,
+                'url': f"https://www.youtube.com/embed/{video_id}"
+            })
+        
+        print(f"DEBUG: Found {len(videos)} videos for {car_make} {car_model}")
+        return {"videos": videos}
+    except Exception as e:
+        print(f"DEBUG: Error searching for car review videos: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"videos": [], "error": f"Failed to search for car review videos: {str(e)}"}

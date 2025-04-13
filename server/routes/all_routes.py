@@ -6,7 +6,7 @@ from openai import OpenAI
 from helpers.cors_helpers import pre_authorized_cors_preflight
 from models.sql_models import CarInventory 
 from database import db
-from helpers.llm_utils import fetch_cars, generate_conversation_summary, get_conversation_summary, detect_end_of_conversation
+from helpers.llm_utils import fetch_cars, generate_conversation_summary, get_conversation_summary, detect_end_of_conversation, find_car_review_videos
 
 # Initialize the OpenAI client using the new syntax
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -52,36 +52,48 @@ tools = [
                     },
                     "mileage": {
                         "type": "integer",
-                        "description": "Maximum mileage. Use -1 to indicate no limit."
+                        "description": "Maximum mileage. Use -1 to indicate no maximum."
                     },
                     "color": {
                         "type": "string",
-                        "description": "Car color"
+                        "description": "Car color. Use empty string to indicate no color filter."
                     },
                     "stock_number": {
                         "type": "string",
-                        "description": "Exact stock number"
+                        "description": "Exact stock number. Use empty string to indicate no stock number filter."
                     },
                     "vin": {
                         "type": "string",
-                        "description": "Exact Vehicle Identification Number"
+                        "description": "Exact VIN. Use empty string to indicate no VIN filter."
                     }
                 },
-                "required": [
-                    "make",
-                    "model",
-                    "year",
-                    "max_year",
-                    "price",
-                    "max_price",
-                    "mileage",
-                    "color",
-                    "stock_number",
-                    "vin"
-                ],
-                "additionalProperties": False
-            },
-            "strict": True
+                "required": ["make", "model"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_car_review_videos",
+            "description": "Search for car review videos on YouTube based on make, model, and optionally year.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "car_make": {
+                        "type": "string",
+                        "description": "The make of the car (e.g., Toyota, Ford)"
+                    },
+                    "car_model": {
+                        "type": "string",
+                        "description": "The model of the car (e.g., Camry, Mustang)"
+                    },
+                    "year": {
+                        "type": "integer",
+                        "description": "Optional year of the car model"
+                    }
+                },
+                "required": ["car_make", "car_model"]
+            }
         }
     }
 ]
@@ -145,6 +157,8 @@ def chat():
                 - Sunday: Closed
                 
                 When customers ask about inventory, use the fetch_cars function to provide accurate, up-to-date information. Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields.
+
+                If a customer shows interest in a specific car or asks to see reviews or videos about a car, use the find_car_review_videos function to provide a list of car review videos on YouTube. This function requires the car_make and car_model parameters, and optionally accepts a year parameter.
                 
                 Remember that you are representing a family-owned business that prides itself on customer service and helping customers find the perfect car. Be helpful, friendly, and professional in all interactions.
                 
@@ -340,26 +354,49 @@ def tool_call_result():
                 
                 # As a fallback, we'll try to process a default fetch_cars call
                 print("DEBUG: Using fallback mechanism to process fetch_cars with default parameters")
-                result = fetch_cars({
-                    "make": "Nissan",
-                    "model": "",
-                    "year": -1,
-                    "max_year": -1,
-                    "price": -1,
-                    "max_price": -1,
-                    "mileage": -1,
-                    "color": "",
-                    "stock_number": "",
-                    "vin": ""
-                })
-                print("DEBUG: Fallback fetch_cars result:", result)
                 
-                # Add the result as an assistant message
-                result_message = {
-                    "role": "assistant",
-                    "content": f"Here are the car details I found: {json.dumps(result)}"
-                }
-                conversation_history.append(result_message)
+                # Check if the message contains a reference to car reviews
+                review_keywords = ["review", "reviews", "video", "videos", "watch", "see", "look at"]
+                message_content = tool_call_message.get("content", "").lower()
+                
+                if any(keyword in message_content for keyword in review_keywords):
+                    print("DEBUG: Detected car review request in fallback mechanism")
+                    result = find_car_review_videos("Nissan", "Kicks", 2025)
+                    print("DEBUG: Fallback find_car_review_videos result:", result)
+                    
+                    # Add the result as a tool response message
+                    tool_response_message = {
+                        "role": "tool",
+                        "tool_call_id": "fallback_tool_call",
+                        "content": json.dumps(result)
+                    }
+                    conversation_history.append(tool_response_message)
+                    
+                    # If there's an error in the result, log it
+                    if "error" in result:
+                        print("DEBUG: Error in fallback find_car_review_videos result:", result["error"])
+                else:
+                    result = fetch_cars({
+                        "make": "Nissan",
+                        "model": "",
+                        "year": -1,
+                        "max_year": -1,
+                        "price": -1,
+                        "max_price": -1,
+                        "mileage": -1,
+                        "color": "",
+                        "stock_number": "",
+                        "vin": ""
+                    })
+                    print("DEBUG: Fallback fetch_cars result:", result)
+                    
+                    # Add the result as a tool response message
+                    tool_response_message = {
+                        "role": "tool",
+                        "tool_call_id": "fallback_tool_call",
+                        "content": json.dumps(result)
+                    }
+                    conversation_history.append(tool_response_message)
                 
                 # Get the final response from the LLM
                 print("DEBUG: Getting final response from LLM with fallback data")
@@ -403,32 +440,39 @@ def tool_call_result():
             else:
                 return jsonify({"error": "No tool call found in conversation history"}), 400
 
-        # Process the tool call
-        tool_call = tool_call_message["tool_calls"][0]
-        func_name = tool_call["function"]["name"]
-        args_str = tool_call["function"]["arguments"]
+        # Process each tool call
+        for tool_call in tool_call_message["tool_calls"]:
+            func_name = tool_call["function"]["name"]
+            args_str = tool_call["function"]["arguments"]
+            tool_call_id = tool_call["id"]
 
-        try:
-            func_args = json.loads(args_str)
-            print("DEBUG: Processing tool call. Function:", func_name, "Arguments:", func_args)
-        except Exception as parse_error:
-            print("DEBUG: Error parsing tool arguments:", parse_error)
-            return jsonify({"error": "Error parsing tool arguments"}), 400
+            try:
+                func_args = json.loads(args_str)
+                print("DEBUG: Processing tool call. Function:", func_name, "Arguments:", func_args)
+            except Exception as parse_error:
+                print("DEBUG: Error parsing tool arguments:", parse_error)
+                return jsonify({"error": "Error parsing tool arguments"}), 400
 
-        # Execute the appropriate function based on the tool name
-        if func_name == "fetch_cars":
-            result = fetch_cars(func_args)
-            print("DEBUG: fetch_cars result:", result)
-            
+            # Execute the appropriate function based on the tool name
+            if func_name == "fetch_cars":
+                result = fetch_cars(func_args)
+                print("DEBUG: fetch_cars result:", result)
+            elif func_name == "find_car_review_videos":
+                result = find_car_review_videos(func_args.get("car_make"), func_args.get("car_model"), func_args.get("year"))
+                print("DEBUG: find_car_review_videos result:", result)
+                # If there's an error in the result, include it in the tool response
+                if "error" in result:
+                    print("DEBUG: Error in find_car_review_videos result:", result["error"])
+            else:
+                return jsonify({"error": f"Unknown tool '{func_name}' called"}), 400
+
             # Add the tool response message with the tool_call_id
             tool_response_message = {
                 "role": "tool",
-                "tool_call_id": tool_call["id"],
+                "tool_call_id": tool_call_id,
                 "content": json.dumps(result)
             }
             conversation_history.append(tool_response_message)
-        else:
-            return jsonify({"error": f"Unknown tool '{func_name}' called"}), 400
 
         # Get the final response from the LLM
         print("DEBUG: Getting final response from LLM")
@@ -526,3 +570,24 @@ def get_summary(conversation_id):
         print("DEBUG: Exception encountered in get summary:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@all_routes_bp.route("/car-review-videos", methods=["POST"])
+def car_review_videos():
+    """
+    Endpoint to search for car review videos on YouTube.
+    """
+    try:
+        data = request.json
+        car_make = data.get("car_make")
+        car_model = data.get("car_model")
+        year = data.get("year")
+        
+        if not car_make or not car_model:
+            return jsonify({"videos": [], "error": "Car make and model are required"}), 400
+        
+        result = find_car_review_videos(car_make, car_model, year)
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error in car_review_videos endpoint: {str(e)}")
+        return jsonify({"videos": [], "error": str(e)}), 500
