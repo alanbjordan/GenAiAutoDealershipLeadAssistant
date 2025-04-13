@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import apiClient from '../utils/api';
+import VideoModal from './VideoModal';
 import './Chat.css';
 
 // A simple function to generate a unique ID.
@@ -75,6 +76,8 @@ const Chat = () => {
   const [summary, setSummary] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [videoResults, setVideoResults] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -223,6 +226,78 @@ const Chat = () => {
     }
   };
 
+  // Function to handle car review video requests
+  const handleCarReviewRequest = async (carMake, carModel, year = null) => {
+    try {
+      setLoading(true);
+      console.log(`Requesting car review videos for ${carMake} ${carModel}${year ? ` ${year}` : ''}`);
+      
+      const response = await apiClient.post('/car-review-videos', {
+        car_make: carMake,
+        car_model: carModel,
+        year: year
+      });
+      
+      console.log('Car review videos response:', response.data);
+      
+      if (response.data.videos && response.data.videos.length > 0) {
+        console.log(`Found ${response.data.videos.length} videos`);
+        setVideoResults(response.data.videos);
+        setIsVideoModalOpen(true);
+      } else {
+        console.log('No videos found in response');
+        // Add a message if no videos were found
+        const noVideosMessage = { 
+          id: generateUniqueId(), 
+          sender: 'bot', 
+          text: `I couldn't find any review videos for the ${carMake} ${carModel}${year ? ` ${year}` : ''}.${response.data.error ? ` Error: ${response.data.error}` : ''}`,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, noVideosMessage]);
+      }
+    } catch (error) {
+      console.error("Error fetching car review videos:", error);
+      const errorMessage = { 
+        id: generateUniqueId(), 
+        sender: 'bot', 
+        text: `Sorry, I encountered an error while searching for car review videos: ${error.message || 'Unknown error'}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to render message content with action buttons
+  const renderMessageContent = (message) => {
+    // Check if the message contains car information that might be of interest
+    const carInfoRegex = /(?:interested in|looking at|considering|thinking about|want to see|want to know more about) (?:a|an) (\d{4})? ?([A-Za-z]+) ([A-Za-z0-9]+)/i;
+    const match = message.text.match(carInfoRegex);
+    
+    if (match && message.sender === 'user') {
+      const year = match[1] ? parseInt(match[1]) : null;
+      const make = match[2];
+      const model = match[3];
+      
+      return (
+        <div>
+          <ReactMarkdown>{message.text}</ReactMarkdown>
+          <div className="action-buttons">
+            <button 
+              className="action-button"
+              onClick={() => handleCarReviewRequest(make, model, year)}
+            >
+              Watch {make} {model} Review Videos
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    return <ReactMarkdown>{message.text}</ReactMarkdown>;
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
@@ -302,7 +377,7 @@ const Chat = () => {
               className={`chat-message ${msg.sender === 'user' ? 'user' : 'bot'}`}
             >
               <div className="message-content">
-                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                {renderMessageContent(msg)}
               </div>
               <div className="message-timestamp">
                 {format(msg.timestamp, 'h:mm a')}
@@ -340,6 +415,13 @@ const Chat = () => {
           {loading ? 'Sending...' : toolCallInProgress ? 'Searching...' : 'Send'}
         </button>
       </form>
+
+      {/* Video Modal */}
+      <VideoModal 
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+        videos={videoResults}
+      />
     </div>
   );
 };
