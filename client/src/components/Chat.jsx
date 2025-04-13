@@ -137,6 +137,7 @@ const Chat = () => {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [summary, setSummary] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -153,6 +154,16 @@ const Chat = () => {
       inputRef.current.focus();
     }
   }, [loading, toolCallInProgress]);
+
+  // Add new effect to handle delayed summary display
+  useEffect(() => {
+    if (summary) {
+      const timer = setTimeout(() => {
+        setShowSummary(true);
+      }, 2000); // 2 second delay
+      return () => clearTimeout(timer);
+    }
+  }, [summary]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -288,7 +299,57 @@ const Chat = () => {
           transition={{ duration: 0.5 }}
           className="summary-container"
         >
-          <ConversationSummary summary={summary} />
+          <div 
+            className="summary-header"
+            onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+          >
+            <h3>Conversation Summary</h3>
+            <div className={`dropdown-arrow ${isSummaryExpanded ? 'expanded' : ''}`}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          
+          {isSummaryExpanded && (
+            <div className="summary-content">
+              <div className="summary-section">
+                <h4>Sentiment</h4>
+                <p className={`sentiment ${summary.sentiment}`}>{summary.sentiment}</p>
+              </div>
+              
+              <div className="summary-section">
+                <h4>Keywords</h4>
+                <div className="keywords">
+                  {summary.keywords.map((keyword, index) => (
+                    <span key={index} className="keyword-tag">{keyword}</span>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="summary-section">
+                <h4>Summary</h4>
+                <p>{summary.summary}</p>
+              </div>
+              
+              <div className="summary-section">
+                <h4>Recommended Department</h4>
+                <p className="department">{summary.department}</p>
+              </div>
+              
+              <div className="summary-section">
+                <h4>Additional Insights</h4>
+                <ul>
+                  <li><strong>Urgency:</strong> {summary.insights.urgency}</li>
+                  <li><strong>Upsell Opportunity:</strong> {summary.insights.upsell_opportunity ? 'Yes' : 'No'}</li>
+                  <li><strong>Customer Interest:</strong> {summary.insights.customer_interest}</li>
+                  {summary.insights.additional_notes && (
+                    <li><strong>Notes:</strong> {summary.insights.additional_notes}</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
       
