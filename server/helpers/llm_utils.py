@@ -1,5 +1,7 @@
 from database import db
-from models.sql_models import CarInventory
+from models.sql_models import CarInventory, ConversationSummary, AutoLeadInteractionDetails
+import json
+import uuid
 
 def fetch_cars(filter_params: dict) -> list:
     """
@@ -66,3 +68,201 @@ def fetch_cars(filter_params: dict) -> list:
         }
     
     return [to_dict(c) for c in results]
+
+def generate_conversation_summary(conversation_history: list, conversation_id: str = None) -> dict:
+    """
+    Generate a summary of the conversation using OpenAI's API.
+    
+    :param conversation_history: List of message objects in the conversation
+    :param conversation_id: Optional ID for the conversation. If not provided, a new one will be generated.
+    :return: Dictionary containing the summary information
+    """
+    from openai import OpenAI
+    import os
+    
+    # Initialize the OpenAI client
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # Generate a conversation ID if not provided
+    if not conversation_id:
+        conversation_id = str(uuid.uuid4())
+    
+    # Prepare the conversation for analysis
+    # Filter out system messages and tool messages to focus on the actual conversation
+    filtered_history = [
+        msg for msg in conversation_history 
+        if msg.get("role") in ["user", "assistant"] and 
+        not (msg.get("role") == "assistant" and "tool_calls" in msg)
+    ]
+    
+    # Create a prompt for the summary generation
+    summary_prompt = {
+        "role": "system",
+        "content": """
+        You are an expert at analyzing car dealership conversations and creating concise, informative summaries.
+        
+        Analyze the provided conversation and create a summary with the following components:
+        
+        1. Overall sentiment analysis (positive, neutral, or negative)
+        2. Key tags/keywords extracted from the conversation (e.g., 'new model', 'financing', 'trade-in', 'service appointment')
+        3. A concise summary of the main discussion points and any relevant customer information
+        4. A follow-up routing recommendation (Sales, Service, Management, HR, Finance, or Parts)
+        5. Additional insights such as urgency or potential upsell opportunities
+        
+        Format your response as a JSON object with the following structure:
+        {
+            "sentiment": "positive/neutral/negative",
+            "keywords": ["keyword1", "keyword2", ...],
+            "summary": "Concise summary text",
+            "department": "Sales/Service/Management/HR/Finance/Parts",
+            "insights": {
+                "urgency": "high/medium/low",
+                "upsell_opportunity": true/false,
+                "customer_interest": "high/medium/low",
+                "additional_notes": "Any other relevant information"
+            }
+        }
+        
+        Be thorough but concise in your analysis.
+        """
+    }
+    
+    # Combine the prompt with the conversation history
+    messages_for_analysis = [summary_prompt] + filtered_history
+    
+    # Call the OpenAI API to generate the summary
+    try:
+        response = client.chat.completions.create(
+            model="o3-mini-2025-01-31",
+            messages=messages_for_analysis,
+            response_format={"type": "json_object"}
+        )
+        
+        # Extract the summary from the response
+        summary_json = json.loads(response.choices[0].message.content)
+        
+        # Add the conversation ID to the summary
+        summary_json["conversation_id"] = conversation_id
+        
+        # Save the summary to the database
+        save_summary_to_db(summary_json)
+        
+        return summary_json
+    
+    except Exception as e:
+        print(f"Error generating conversation summary: {e}")
+        # Return a default summary in case of error
+        return {
+            "conversation_id": conversation_id,
+            "sentiment": "neutral",
+            "keywords": ["error"],
+            "summary": "Error generating summary. Please try again.",
+            "department": "Sales",
+            "insights": {
+                "urgency": "low",
+                "upsell_opportunity": False,
+                "customer_interest": "unknown",
+                "additional_notes": f"Error: {str(e)}"
+            }
+        }
+
+def save_summary_to_db(summary_data: dict) -> bool:
+    """
+    Save the conversation summary to the database.
+    
+    :param summary_data: Dictionary containing the summary information
+    :return: True if successful, False otherwise
+    """
+    try:
+        # Create a new interaction record
+        new_interaction = AutoLeadInteractionDetails(
+            # We don't have a lead_id yet, so it's set to None
+            conversation_summary=summary_data["summary"],
+            sentiment=summary_data["sentiment"],
+            product_keywords=summary_data["keywords"],
+            # Set priority_flag based on urgency in insights
+            priority_flag=summary_data["insights"].get("urgency") == "high",
+            next_steps_recommendation=summary_data["insights"].get("additional_notes", "")
+        )
+        
+        # Add the new interaction to the session
+        db.session.add(new_interaction)
+        
+        # Commit the changes
+        db.session.commit()
+        return True
+    
+    except Exception as e:
+        print(f"Error saving summary to database: {e}")
+        db.session.rollback()
+        return False
+
+def get_conversation_summary(conversation_id: str) -> dict:
+    """
+    Retrieve a conversation summary from the database.
+    
+    :param conversation_id: The ID of the conversation
+    :return: Dictionary containing the summary information or None if not found
+    """
+    try:
+        # Since we're now using AutoLeadInteractionDetails, we need to find the most recent interaction
+        # We don't have a direct conversation_id field, so we'll get the most recent interaction
+        summary = db.session.query(AutoLeadInteractionDetails).order_by(
+            AutoLeadInteractionDetails.created_at.desc()
+        ).first()
+        
+        if summary:
+            # Convert the summary to the expected format
+            return {
+                "conversation_id": conversation_id,  # Use the provided conversation_id
+                "sentiment": summary.sentiment,
+                "keywords": summary.product_keywords,
+                "summary": summary.conversation_summary,
+                "department": "Sales",  # Default to Sales since we don't have this field
+                "insights": {
+                    "urgency": "high" if summary.priority_flag else "medium",
+                    "additional_notes": summary.next_steps_recommendation
+                },
+                "created_at": summary.created_at.isoformat() if summary.created_at else None
+            }
+        else:
+            return None
+    
+    except Exception as e:
+        print(f"Error retrieving summary from database: {e}")
+        return None
+
+def detect_end_of_conversation(conversation_history: list) -> bool:
+    """
+    Analyze the conversation history to detect if the conversation has ended.
+    
+    This function looks for explicit end-of-conversation signals in the most recent messages.
+    
+    :param conversation_history: List of message objects in the conversation
+    :return: True if the conversation appears to have ended, False otherwise
+    """
+    # We need at least a few messages to determine if the conversation has ended
+    if len(conversation_history) < 3:
+        return False
+    
+    # Get the last few messages (up to 5) to analyze
+    recent_messages = conversation_history[-5:]
+    
+    # Look for end-of-conversation signals in the assistant's messages
+    for msg in reversed(recent_messages):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "").lower()
+            
+            # Check for explicit end-of-conversation phrases
+            end_phrases = [
+                "goodbye", "bye", "thank you for chatting", "have a great day",
+                "is there anything else", "anything else i can help", "end of conversation",
+                "conversation is complete", "conversation has ended", "wrapping up",
+                "summarizing our conversation", "conversation summary"
+            ]
+            
+            # Check if any of the end phrases are in the message
+            if any(phrase in content for phrase in end_phrases):
+                return True
+    
+    return False

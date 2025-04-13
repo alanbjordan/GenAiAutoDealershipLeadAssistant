@@ -6,7 +6,7 @@ from openai import OpenAI
 from helpers.cors_helpers import pre_authorized_cors_preflight
 from models.sql_models import CarInventory 
 from database import db
-from helpers.llm_utils import fetch_cars 
+from helpers.llm_utils import fetch_cars, generate_conversation_summary, get_conversation_summary, detect_end_of_conversation
 
 # Initialize the OpenAI client using the new syntax
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -113,7 +113,7 @@ def chat():
             "role": "system",
             "content": (
                 """ 
-                You are Patricia, a knowledgeable and friendly car sales agent at Nissan of Hendersonville, a family-owned and operated Nissan dealership in Hendersonville, North Carolina.
+                You are Patricia, a knowledgeable and friendly customer support agent at Nissan of Hendersonville, a family-owned and operated Nissan dealership in Hendersonville, North Carolina.
                 
                 IMPORTANT: You must ONLY provide information that is explicitly stated in this system message. DO NOT make up or guess any information about the dealership, including:
                 - Business hours
@@ -131,6 +131,8 @@ def chat():
                 - Provide accurate information about Nissan models, features, pricing, and availability
                 - Assist with scheduling test drives and answering questions about the car buying process
                 - Represent the dealership with professionalism and enthusiasm
+                - Guide customers that need to schedule a service appointment
+                - Handle customer complaints and provide solutions
                 
                 Company Information (VERIFY ALL INFORMATION BEFORE PROVIDING):
                 - Name: Nissan of Hendersonville
@@ -139,8 +141,7 @@ def chat():
                 - Website: https://www.nissanofhendersonville.com
                 
                 Business Hours (VERIFY ALL INFORMATION BEFORE PROVIDING):
-                - Monday-Friday: 7 AM - 6 PM
-                - Saturday: 7 AM - 6 PM
+                - Monday-Saturday: 9 AM - 7 PM
                 - Sunday: Closed
                 
                 When customers ask about inventory, use the fetch_cars function to provide accurate, up-to-date information. Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields.
@@ -158,6 +159,13 @@ def chat():
                 3. Provide accurate information about when the dealership will be open next
                 4. Consider the day of the week when discussing availability
                 5. Dont mention the service hours or business hours unless asked or the customer asks about booking an appointment or test drive.
+                
+                IMPORTANT - End of Conversation:
+                When you detect that the conversation is coming to an end (e.g., the customer says goodbye, thanks you, or indicates they have no more questions), 
+                you should explicitly signal the end of the conversation with a clear closing message such as:
+                "Thank you for chatting with me today. I'm glad I could help you with your questions about Nissan vehicles. Have a great day!"
+                
+                This helps our system know when to generate a summary of the conversation.
                 """
             )
         }
@@ -262,11 +270,30 @@ def chat():
         
         conversation_history.append(assistant_message)
         print("DEBUG: Final conversation history:", conversation_history)
+        
+        # Check if the conversation has ended and generate a summary if needed
+        summary = None
+        if detect_end_of_conversation(conversation_history):
+            print("DEBUG: End of conversation detected, generating summary")
+            # Generate a conversation ID if not already present
+            conversation_id = None
+            for msg in conversation_history:
+                if msg.get("role") == "system" and "conversation_id" in msg.get("content", ""):
+                    try:
+                        conversation_id = json.loads(msg.get("content")).get("conversation_id")
+                        break
+                    except:
+                        pass
+            
+            # Generate the summary
+            summary = generate_conversation_summary(conversation_history, conversation_id)
+            print("DEBUG: Summary generated:", summary)
 
         return jsonify({
             "chat_response": assistant_response,
             "conversation_history": conversation_history,
-            "tool_call_detected": tool_call_detected
+            "tool_call_detected": tool_call_detected,
+            "summary": summary
         }), 200
 
     except Exception as e:
@@ -290,31 +317,14 @@ def tool_call_result():
         if not isinstance(conversation_history, list):
             return jsonify({"error": "Invalid conversation history format"}), 400
 
-        print("DEBUG: Processing tool call with conversation history:", conversation_history)
-        print("DEBUG: Conversation history length:", len(conversation_history))
+        print("DEBUG: Tool call result conversation history length:", len(conversation_history))
         
-        # Print each message in the conversation history for debugging
-        for i, msg in enumerate(conversation_history):
-            print(f"DEBUG: Message {i}:", msg)
-            if msg.get("role") == "assistant":
-                print(f"DEBUG: Assistant message {i} content:", msg.get("content"))
-                print(f"DEBUG: Assistant message {i} has tool_calls:", "tool_calls" in msg)
-
-        # Find the last assistant message with tool calls
+        # Find the assistant message with tool calls
         tool_call_message = None
         for msg in reversed(conversation_history):
-            if msg.get("role") == "assistant" and "tool_calls" in msg:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
                 tool_call_message = msg
-                print("DEBUG: Found assistant message with tool_calls:", msg)
                 break
-        
-        # If no message with tool_calls is found, check for the last assistant message
-        if not tool_call_message:
-            for msg in reversed(conversation_history):
-                if msg.get("role") == "assistant":
-                    tool_call_message = msg
-                    print("DEBUG: Found assistant message without tool_calls:", msg)
-                    break
         
         if not tool_call_message:
             return jsonify({"error": "No assistant message found in conversation history"}), 400
@@ -367,9 +377,28 @@ def tool_call_result():
                     "content": final_response
                 })
                 
+                # Check if the conversation has ended and generate a summary if needed
+                summary = None
+                if detect_end_of_conversation(conversation_history):
+                    print("DEBUG: End of conversation detected, generating summary")
+                    # Generate a conversation ID if not already present
+                    conversation_id = None
+                    for msg in conversation_history:
+                        if msg.get("role") == "system" and "conversation_id" in msg.get("content", ""):
+                            try:
+                                conversation_id = json.loads(msg.get("content")).get("conversation_id")
+                                break
+                            except:
+                                pass
+                    
+                    # Generate the summary
+                    summary = generate_conversation_summary(conversation_history, conversation_id)
+                    print("DEBUG: Summary generated:", summary)
+                
                 return jsonify({
                     "final_response": final_response,
-                    "final_conversation_history": conversation_history
+                    "final_conversation_history": conversation_history,
+                    "summary": summary
                 }), 200
             else:
                 return jsonify({"error": "No tool call found in conversation history"}), 400
@@ -416,13 +445,84 @@ def tool_call_result():
             "role": "assistant",
             "content": final_response
         })
+        
+        # Check if the conversation has ended and generate a summary if needed
+        summary = None
+        if detect_end_of_conversation(conversation_history):
+            print("DEBUG: End of conversation detected, generating summary")
+            # Generate a conversation ID if not already present
+            conversation_id = None
+            for msg in conversation_history:
+                if msg.get("role") == "system" and "conversation_id" in msg.get("content", ""):
+                    try:
+                        conversation_id = json.loads(msg.get("content")).get("conversation_id")
+                        break
+                    except:
+                        pass
+            
+            # Generate the summary
+            summary = generate_conversation_summary(conversation_history, conversation_id)
+            print("DEBUG: Summary generated:", summary)
 
         return jsonify({
             "final_response": final_response,
-            "final_conversation_history": conversation_history
+            "final_conversation_history": conversation_history,
+            "summary": summary
         }), 200
 
     except Exception as e:
         print("DEBUG: Exception encountered in tool call result:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@all_routes_bp.route("/generate-summary", methods=["POST"])
+def generate_summary():
+    try:
+        data = request.get_json(force=True)
+        print("DEBUG: Received generate summary request JSON:", data)
+
+        if not data:
+            return jsonify({"error": "Missing JSON body"}), 400
+
+        # Get the conversation history and optional conversation ID
+        conversation_history = data.get("conversation_history", [])
+        conversation_id = data.get("conversation_id")
+        
+        if not isinstance(conversation_history, list):
+            return jsonify({"error": "Invalid conversation history format"}), 400
+
+        print("DEBUG: Generating summary for conversation history length:", len(conversation_history))
+        
+        # Generate the summary
+        summary = generate_conversation_summary(conversation_history, conversation_id)
+        
+        return jsonify({
+            "summary": summary
+        }), 200
+
+    except Exception as e:
+        print("DEBUG: Exception encountered in generate summary:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@all_routes_bp.route("/get-summary/<conversation_id>", methods=["GET"])
+def get_summary(conversation_id):
+    try:
+        print(f"DEBUG: Retrieving summary for conversation ID: {conversation_id}")
+        
+        # Get the summary from the database
+        summary = get_conversation_summary(conversation_id)
+        
+        if summary:
+            return jsonify({
+                "summary": summary
+            }), 200
+        else:
+            return jsonify({"error": "Summary not found"}), 404
+
+    except Exception as e:
+        print("DEBUG: Exception encountered in get summary:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
