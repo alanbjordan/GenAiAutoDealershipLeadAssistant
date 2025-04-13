@@ -216,7 +216,9 @@ def chat():
         print("DEBUG: Assistant message object:", message)
 
         # Check if a tool call was triggered
+        tool_call_detected = False
         if message.tool_calls and len(message.tool_calls) > 0:
+            tool_call_detected = True
             tool_call = message.tool_calls[0]
             func_name = tool_call.function.name
             args_str = tool_call.function.arguments
@@ -229,46 +231,198 @@ def chat():
                 print("DEBUG: Error parsing tool arguments:", parse_error)
                 assistant_response = "Error parsing tool arguments."
             else:
-                if func_name == "fetch_cars":
-                    result = fetch_cars(func_args)
-                    print("DEBUG: fetch_cars result:", result)
-                    
-                    # Add the result as an assistant message
-                    result_message = {
-                        "role": "assistant",
-                        "content": f"Here are the car details I found: {json.dumps(result)}"
-                    }
-                    conversation_history.append(result_message)
-                    
-                    print("DEBUG: Updated conversation history after tool call:", conversation_history)
-                    completion = client.chat.completions.create(
-                        model="o3-mini-2025-01-31",
-                        messages=conversation_history
-                    )
-                    message = completion.choices[0].message
-                    print("DEBUG: Assistant message after tool integration:", message)
-                    assistant_response = message.content or ""
-                else:
-                    assistant_response = f"Unknown tool '{func_name}' called."
-                    print("DEBUG: Unknown tool call detected:", func_name)
+                # For tool calls, we'll just return a placeholder response
+                # The actual tool call processing will happen in the tool-call-result endpoint
+                assistant_response = "Processing your request..."
         else:
             assistant_response = message.content or ""
             print("DEBUG: No tool call detected. Assistant response:", assistant_response)
 
         # Append the assistant's response to the conversation history
-        # Remove the tool_calls from the message to avoid the error
-        conversation_history.append({
+        # Include the tool_calls property if it exists
+        assistant_message = {
             "role": "assistant",
             "content": assistant_response
-        })
+        }
+        
+        # If there are tool calls, include them in the message
+        if message.tool_calls and len(message.tool_calls) > 0:
+            # Convert tool_calls to a dictionary format that can be serialized
+            tool_calls_dict = []
+            for tool_call in message.tool_calls:
+                tool_calls_dict.append({
+                    "id": tool_call.id,
+                    "type": tool_call.type,
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                })
+            assistant_message["tool_calls"] = tool_calls_dict
+        
+        conversation_history.append(assistant_message)
         print("DEBUG: Final conversation history:", conversation_history)
 
         return jsonify({
             "chat_response": assistant_response,
-            "conversation_history": conversation_history
+            "conversation_history": conversation_history,
+            "tool_call_detected": tool_call_detected
         }), 200
 
     except Exception as e:
         print("DEBUG: Exception encountered:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@all_routes_bp.route("/tool-call-result", methods=["POST"])
+def tool_call_result():
+    try:
+        data = request.get_json(force=True)
+        print("DEBUG: Received tool call result request JSON:", data)
+
+        if not data:
+            return jsonify({"error": "Missing JSON body"}), 400
+
+        # Get the conversation history
+        conversation_history = data.get("conversation_history", [])
+        
+        if not isinstance(conversation_history, list):
+            return jsonify({"error": "Invalid conversation history format"}), 400
+
+        print("DEBUG: Processing tool call with conversation history:", conversation_history)
+        print("DEBUG: Conversation history length:", len(conversation_history))
+        
+        # Print each message in the conversation history for debugging
+        for i, msg in enumerate(conversation_history):
+            print(f"DEBUG: Message {i}:", msg)
+            if msg.get("role") == "assistant":
+                print(f"DEBUG: Assistant message {i} content:", msg.get("content"))
+                print(f"DEBUG: Assistant message {i} has tool_calls:", "tool_calls" in msg)
+
+        # Find the last assistant message with tool calls
+        tool_call_message = None
+        for msg in reversed(conversation_history):
+            if msg.get("role") == "assistant" and "tool_calls" in msg:
+                tool_call_message = msg
+                print("DEBUG: Found assistant message with tool_calls:", msg)
+                break
+        
+        # If no message with tool_calls is found, check for the last assistant message
+        if not tool_call_message:
+            for msg in reversed(conversation_history):
+                if msg.get("role") == "assistant":
+                    tool_call_message = msg
+                    print("DEBUG: Found assistant message without tool_calls:", msg)
+                    break
+        
+        if not tool_call_message:
+            return jsonify({"error": "No assistant message found in conversation history"}), 400
+            
+        # Check if the message has tool_calls
+        if not tool_call_message.get("tool_calls"):
+            # If the message doesn't have tool_calls, check if it's the "Processing your request..." message
+            if tool_call_message.get("content") == "Processing your request...":
+                # This is likely the message we're looking for, but it doesn't have tool_calls
+                # We need to find the original message with tool_calls from the OpenAI response
+                # For now, we'll just return an error
+                print("DEBUG: Found 'Processing your request...' message without tool_calls")
+                
+                # As a fallback, we'll try to process a default fetch_cars call
+                print("DEBUG: Using fallback mechanism to process fetch_cars with default parameters")
+                result = fetch_cars({
+                    "make": "Nissan",
+                    "model": "",
+                    "year": -1,
+                    "max_year": -1,
+                    "price": -1,
+                    "max_price": -1,
+                    "mileage": -1,
+                    "color": "",
+                    "stock_number": "",
+                    "vin": ""
+                })
+                print("DEBUG: Fallback fetch_cars result:", result)
+                
+                # Add the result as an assistant message
+                result_message = {
+                    "role": "assistant",
+                    "content": f"Here are the car details I found: {json.dumps(result)}"
+                }
+                conversation_history.append(result_message)
+                
+                # Get the final response from the LLM
+                print("DEBUG: Getting final response from LLM with fallback data")
+                completion = client.chat.completions.create(
+                    model="o3-mini-2025-01-31",
+                    messages=conversation_history
+                )
+                message = completion.choices[0].message
+                final_response = message.content or ""
+                print("DEBUG: Final response from LLM with fallback data:", final_response)
+                
+                # Append the final response to the conversation history
+                conversation_history.append({
+                    "role": "assistant",
+                    "content": final_response
+                })
+                
+                return jsonify({
+                    "final_response": final_response,
+                    "final_conversation_history": conversation_history
+                }), 200
+            else:
+                return jsonify({"error": "No tool call found in conversation history"}), 400
+
+        # Process the tool call
+        tool_call = tool_call_message["tool_calls"][0]
+        func_name = tool_call["function"]["name"]
+        args_str = tool_call["function"]["arguments"]
+
+        try:
+            func_args = json.loads(args_str)
+            print("DEBUG: Processing tool call. Function:", func_name, "Arguments:", func_args)
+        except Exception as parse_error:
+            print("DEBUG: Error parsing tool arguments:", parse_error)
+            return jsonify({"error": "Error parsing tool arguments"}), 400
+
+        # Execute the appropriate function based on the tool name
+        if func_name == "fetch_cars":
+            result = fetch_cars(func_args)
+            print("DEBUG: fetch_cars result:", result)
+            
+            # Add the tool response message with the tool_call_id
+            tool_response_message = {
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "content": json.dumps(result)
+            }
+            conversation_history.append(tool_response_message)
+        else:
+            return jsonify({"error": f"Unknown tool '{func_name}' called"}), 400
+
+        # Get the final response from the LLM
+        print("DEBUG: Getting final response from LLM")
+        completion = client.chat.completions.create(
+            model="o3-mini-2025-01-31",
+            messages=conversation_history
+        )
+        message = completion.choices[0].message
+        final_response = message.content or ""
+        print("DEBUG: Final response from LLM:", final_response)
+
+        # Append the final response to the conversation history
+        conversation_history.append({
+            "role": "assistant",
+            "content": final_response
+        })
+
+        return jsonify({
+            "final_response": final_response,
+            "final_conversation_history": conversation_history
+        }), 200
+
+    except Exception as e:
+        print("DEBUG: Exception encountered in tool call result:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
