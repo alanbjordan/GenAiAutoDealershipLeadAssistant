@@ -59,6 +59,54 @@ const TypingIndicator = () => (
   </div>
 );
 
+// Component to display the conversation summary
+const ConversationSummary = ({ summary }) => {
+  if (!summary) return null;
+  
+  return (
+    <div className="conversation-summary">
+      <h3>Conversation Summary</h3>
+      <div className="summary-content">
+        <div className="summary-section">
+          <h4>Sentiment</h4>
+          <p className={`sentiment ${summary.sentiment}`}>{summary.sentiment}</p>
+        </div>
+        
+        <div className="summary-section">
+          <h4>Keywords</h4>
+          <div className="keywords">
+            {summary.keywords.map((keyword, index) => (
+              <span key={index} className="keyword-tag">{keyword}</span>
+            ))}
+          </div>
+        </div>
+        
+        <div className="summary-section">
+          <h4>Summary</h4>
+          <p>{summary.summary}</p>
+        </div>
+        
+        <div className="summary-section">
+          <h4>Recommended Department</h4>
+          <p className="department">{summary.department}</p>
+        </div>
+        
+        <div className="summary-section">
+          <h4>Additional Insights</h4>
+          <ul>
+            <li><strong>Urgency:</strong> {summary.insights.urgency}</li>
+            <li><strong>Upsell Opportunity:</strong> {summary.insights.upsell_opportunity ? 'Yes' : 'No'}</li>
+            <li><strong>Customer Interest:</strong> {summary.insights.customer_interest}</li>
+            {summary.insights.additional_notes && (
+              <li><strong>Notes:</strong> {summary.insights.additional_notes}</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Chat = () => {
   const [messages, setMessages] = useState([
     { 
@@ -72,6 +120,11 @@ const Chat = () => {
   const [loading, setLoading] = useState(false);
   const [toolCallInProgress, setToolCallInProgress] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryGenerated, setSummaryGenerated] = useState(false);
+  const [inactivityTimer, setInactivityTimer] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -81,13 +134,86 @@ const Chat = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, summary]);
 
   useEffect(() => {
     if (!loading && !toolCallInProgress && inputRef.current) {
       inputRef.current.focus();
     }
   }, [loading, toolCallInProgress]);
+
+  // Reset inactivity timer on user activity
+  useEffect(() => {
+    const resetTimer = () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      
+      // Only set a new timer if a summary hasn't been generated yet
+      if (!summaryGenerated) {
+        // Set a new timer for 5 minutes of inactivity
+        const timer = setTimeout(() => {
+          generateSummary();
+        }, 5 * 60 * 1000); // 5 minutes
+        
+        setInactivityTimer(timer);
+      }
+    };
+    
+    // Add event listeners for user activity
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('click', resetTimer);
+    
+    // Initial timer setup
+    resetTimer();
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('click', resetTimer);
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+    };
+  }, [inactivityTimer, summaryGenerated]);
+
+  // Function to generate a summary
+  const generateSummary = async () => {
+    // Don't generate if too short, already exists, or has already been generated
+    if (conversationHistory.length < 2 || summary || summaryGenerated) return;
+    
+    try {
+      setLoading(true);
+      
+      const response = await apiClient.post('/generate-summary', {
+        conversation_history: conversationHistory,
+        conversation_id: conversationId
+      });
+      
+      const { summary: newSummary } = response.data;
+      
+      // Update the conversation ID if it was generated
+      if (newSummary.conversation_id) {
+        setConversationId(newSummary.conversation_id);
+      }
+      
+      setSummary(newSummary);
+      setShowSummary(true);
+      setSummaryGenerated(true); // Mark that a summary has been generated
+      
+      // Clear the inactivity timer since we've generated a summary
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        setInactivityTimer(null);
+      }
+    } catch (error) {
+      console.error("Error generating summary:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -183,6 +309,18 @@ const Chat = () => {
         };
         setMessages(prev => [...prev, botMessage]);
       }
+      
+      // Check if the user's message indicates the end of the conversation
+      const endPhrases = ['goodbye', 'bye', 'thank you', 'thanks', 'end chat', 'end conversation'];
+      const isEnding = endPhrases.some(phrase => 
+        userInput.toLowerCase().includes(phrase)
+      );
+      
+      if (isEnding && !summaryGenerated) {
+        // Generate a summary when the conversation appears to be ending
+        // Only if a summary hasn't been generated yet
+        generateSummary();
+      }
     } catch (error) {
       console.error("Error sending message:", error);
       const errorMessage = { 
@@ -234,6 +372,17 @@ const Chat = () => {
         )}
         <div ref={messagesEndRef} />
       </div>
+      
+      {showSummary && summary && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <ConversationSummary summary={summary} />
+        </motion.div>
+      )}
+      
       <form className="chat-input-container" onSubmit={handleSend}>
         <input
           ref={inputRef}

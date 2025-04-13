@@ -21,3 +21,20 @@ class CarInventory(db.Model):
 
     def __repr__(self):
         return f"<CarInventory {self.stock_number} - {self.make} {self.model}>"
+
+# Define the ConversationSummary model
+class ConversationSummary(db.Model):
+    __tablename__ = "conversation_summaries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.String(100), unique=True, nullable=False)
+    sentiment = db.Column(db.String(20), nullable=False)  # positive, neutral, negative
+    keywords = db.Column(db.JSON, nullable=True)  # Store as JSON array
+    summary = db.Column(db.Text, nullable=False)
+    department = db.Column(db.String(50), nullable=False)  # Sales, Service, Management, etc.
+    insights = db.Column(db.JSON, nullable=True)  # Store additional insights as JSON
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<ConversationSummary {self.conversation_id} - {self.department}>"
