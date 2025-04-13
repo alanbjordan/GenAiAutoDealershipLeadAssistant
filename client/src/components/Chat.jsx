@@ -59,69 +59,6 @@ const TypingIndicator = () => (
   </div>
 );
 
-// Component to display the conversation summary
-const ConversationSummary = ({ summary }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  
-  if (!summary) return null;
-  
-  return (
-    <div className="conversation-summary">
-      <div 
-        className="summary-header" 
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <h3>Conversation Summary</h3>
-        <div className={`dropdown-arrow ${isExpanded ? 'expanded' : ''}`}>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-      </div>
-      
-      {isExpanded && (
-        <div className="summary-content">
-          <div className="summary-section">
-            <h4>Sentiment</h4>
-            <p className={`sentiment ${summary.sentiment}`}>{summary.sentiment}</p>
-          </div>
-          
-          <div className="summary-section">
-            <h4>Keywords</h4>
-            <div className="keywords">
-              {summary.keywords.map((keyword, index) => (
-                <span key={index} className="keyword-tag">{keyword}</span>
-              ))}
-            </div>
-          </div>
-          
-          <div className="summary-section">
-            <h4>Summary</h4>
-            <p>{summary.summary}</p>
-          </div>
-          
-          <div className="summary-section">
-            <h4>Recommended Department</h4>
-            <p className="department">{summary.department}</p>
-          </div>
-          
-          <div className="summary-section">
-            <h4>Additional Insights</h4>
-            <ul>
-              <li><strong>Urgency:</strong> {summary.insights.urgency}</li>
-              <li><strong>Upsell Opportunity:</strong> {summary.insights.upsell_opportunity ? 'Yes' : 'No'}</li>
-              <li><strong>Customer Interest:</strong> {summary.insights.customer_interest}</li>
-              {summary.insights.additional_notes && (
-                <li><strong>Notes:</strong> {summary.insights.additional_notes}</li>
-              )}
-            </ul>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const Chat = () => {
   const [messages, setMessages] = useState([
     { 
