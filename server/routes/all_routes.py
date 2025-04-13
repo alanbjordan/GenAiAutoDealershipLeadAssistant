@@ -157,6 +157,7 @@ def chat():
                 2. Avoid scheduling appointments outside of business hours
                 3. Provide accurate information about when the dealership will be open next
                 4. Consider the day of the week when discussing availability
+                5. Dont mention the service hours or business hours unless asked or the customer asks about booking an appointment or test drive.
                 """
             )
         }
