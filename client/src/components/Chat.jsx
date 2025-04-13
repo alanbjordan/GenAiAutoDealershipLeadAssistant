@@ -70,6 +70,7 @@ const Chat = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [toolCallInProgress, setToolCallInProgress] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -83,10 +84,10 @@ const Chat = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (!loading && inputRef.current) {
+    if (!loading && !toolCallInProgress && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [loading]);
+  }, [loading, toolCallInProgress]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -131,18 +132,57 @@ const Chat = () => {
       };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response, conversation_history: updatedHistory } = response.data;
+      const { chat_response, conversation_history: updatedHistory, tool_call_detected } = response.data;
       
       // Store the updated conversation history
       setConversationHistory(updatedHistory);
 
-      const botMessage = { 
-        id: generateUniqueId(), 
-        sender: 'bot', 
-        text: chat_response,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, botMessage]);
+      // Check if a tool call was detected
+      if (tool_call_detected) {
+        // Set tool call in progress state
+        setToolCallInProgress(true);
+        
+        // Add a message indicating that we're searching inventory
+        const searchingMessage = { 
+          id: generateUniqueId(), 
+          sender: 'bot', 
+          text: 'Please wait while I search our inventory.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, searchingMessage]);
+        
+        // Wait for the tool call to complete
+        const toolCallResponse = await apiClient.post('/tool-call-result', {
+          conversation_history: updatedHistory
+        });
+        
+        // Get the final response after the tool call
+        const { final_response, final_conversation_history } = toolCallResponse.data;
+        
+        // Update the conversation history
+        setConversationHistory(final_conversation_history);
+        
+        // Add the final response as a message
+        const finalMessage = { 
+          id: generateUniqueId(), 
+          sender: 'bot', 
+          text: final_response,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, finalMessage]);
+        
+        // Reset the tool call in progress state
+        setToolCallInProgress(false);
+      } else {
+        // No tool call, just add the response as a message
+        const botMessage = { 
+          id: generateUniqueId(), 
+          sender: 'bot', 
+          text: chat_response,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+      }
     } catch (error) {
       console.error("Error sending message:", error);
       const errorMessage = { 
@@ -152,6 +192,7 @@ const Chat = () => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+      setToolCallInProgress(false);
     } finally {
       setLoading(false);
     }
@@ -182,7 +223,7 @@ const Chat = () => {
             </motion.div>
           ))}
         </AnimatePresence>
-        {loading && (
+        {(loading || toolCallInProgress) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -200,15 +241,15 @@ const Chat = () => {
           placeholder="Type your message here..."
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          disabled={loading}
+          disabled={loading || toolCallInProgress}
           className="chat-input"
         />
         <button 
           type="submit" 
-          disabled={loading || !inputText.trim()} 
-          className={`chat-send-button ${loading ? 'loading' : ''}`}
+          disabled={loading || toolCallInProgress || !inputText.trim()} 
+          className={`chat-send-button ${(loading || toolCallInProgress) ? 'loading' : ''}`}
         >
-          {loading ? 'Sending...' : 'Send'}
+          {loading ? 'Sending...' : toolCallInProgress ? 'Searching...' : 'Send'}
         </button>
       </form>
     </div>
