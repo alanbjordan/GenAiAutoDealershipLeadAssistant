@@ -1,5 +1,5 @@
 from database import db
-from models.sql_models import CarInventory, ConversationSummary
+from models.sql_models import CarInventory, ConversationSummary, AutoLeadInteractionDetails
 import json
 import uuid
 
@@ -174,29 +174,19 @@ def save_summary_to_db(summary_data: dict) -> bool:
     :return: True if successful, False otherwise
     """
     try:
-        # Check if a summary with this conversation ID already exists
-        existing_summary = db.session.query(ConversationSummary).filter_by(
-            conversation_id=summary_data["conversation_id"]
-        ).first()
+        # Create a new interaction record
+        new_interaction = AutoLeadInteractionDetails(
+            # We don't have a lead_id yet, so it's set to None
+            conversation_summary=summary_data["summary"],
+            sentiment=summary_data["sentiment"],
+            product_keywords=summary_data["keywords"],
+            # Set priority_flag based on urgency in insights
+            priority_flag=summary_data["insights"].get("urgency") == "high",
+            next_steps_recommendation=summary_data["insights"].get("additional_notes", "")
+        )
         
-        if existing_summary:
-            # Update the existing summary
-            existing_summary.sentiment = summary_data["sentiment"]
-            existing_summary.keywords = summary_data["keywords"]
-            existing_summary.summary = summary_data["summary"]
-            existing_summary.department = summary_data["department"]
-            existing_summary.insights = summary_data["insights"]
-        else:
-            # Create a new summary
-            new_summary = ConversationSummary(
-                conversation_id=summary_data["conversation_id"],
-                sentiment=summary_data["sentiment"],
-                keywords=summary_data["keywords"],
-                summary=summary_data["summary"],
-                department=summary_data["department"],
-                insights=summary_data["insights"]
-            )
-            db.session.add(new_summary)
+        # Add the new interaction to the session
+        db.session.add(new_interaction)
         
         # Commit the changes
         db.session.commit()
@@ -211,24 +201,29 @@ def get_conversation_summary(conversation_id: str) -> dict:
     """
     Retrieve a conversation summary from the database.
     
-    :param conversation_id: ID of the conversation
+    :param conversation_id: The ID of the conversation
     :return: Dictionary containing the summary information or None if not found
     """
     try:
-        summary = db.session.query(ConversationSummary).filter_by(
-            conversation_id=conversation_id
+        # Since we're now using AutoLeadInteractionDetails, we need to find the most recent interaction
+        # We don't have a direct conversation_id field, so we'll get the most recent interaction
+        summary = db.session.query(AutoLeadInteractionDetails).order_by(
+            AutoLeadInteractionDetails.created_at.desc()
         ).first()
         
         if summary:
+            # Convert the summary to the expected format
             return {
-                "conversation_id": summary.conversation_id,
+                "conversation_id": conversation_id,  # Use the provided conversation_id
                 "sentiment": summary.sentiment,
-                "keywords": summary.keywords,
-                "summary": summary.summary,
-                "department": summary.department,
-                "insights": summary.insights,
-                "created_at": summary.created_at.isoformat() if summary.created_at else None,
-                "updated_at": summary.updated_at.isoformat() if summary.updated_at else None
+                "keywords": summary.product_keywords,
+                "summary": summary.conversation_summary,
+                "department": "Sales",  # Default to Sales since we don't have this field
+                "insights": {
+                    "urgency": "high" if summary.priority_flag else "medium",
+                    "additional_notes": summary.next_steps_recommendation
+                },
+                "created_at": summary.created_at.isoformat() if summary.created_at else None
             }
         else:
             return None

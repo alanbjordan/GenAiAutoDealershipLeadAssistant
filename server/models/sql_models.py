@@ -22,6 +22,37 @@ class CarInventory(db.Model):
     def __repr__(self):
         return f"<CarInventory {self.stock_number} - {self.make} {self.model}>"
 
+# Define the AutoLead model
+class AutoLead(db.Model):
+    __tablename__ = "auto_leads"
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Add other fields as needed based on your database schema
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship to interactions
+    interactions = db.relationship('AutoLeadInteractionDetails', backref='lead', lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<AutoLead {self.id}>"
+
+# Define the AutoLeadInteractionDetails model
+class AutoLeadInteractionDetails(db.Model):
+    __tablename__ = "auto_leads_interaction_details"
+
+    interaction_id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey('auto_leads.id', ondelete='CASCADE'), nullable=True)
+    conversation_transcript = db.Column(db.Text, nullable=True)
+    conversation_summary = db.Column(db.Text, nullable=True)
+    sentiment = db.Column(db.String(20), nullable=True)
+    product_keywords = db.Column(db.ARRAY(db.String), nullable=True)
+    priority_flag = db.Column(db.Boolean, default=False)
+    next_steps_recommendation = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<AutoLeadInteractionDetails {self.interaction_id}>"
+
 # Define the ConversationSummary model
 class ConversationSummary(db.Model):
     __tablename__ = "conversation_summaries"
