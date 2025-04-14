@@ -141,7 +141,9 @@ def generate_conversation_summary(conversation_history: list, conversation_id: s
         response = client.chat.completions.create(
             model="o3-mini-2025-01-31",
             messages=messages_for_analysis,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            max_completion_tokens=1000,
+            reasoning_effort="low"
         )
         
         # Extract the summary from the response

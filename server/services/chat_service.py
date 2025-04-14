@@ -126,7 +126,7 @@ def get_system_message():
             - Use the `fetch_cars` function for up-to-date inventory information. Default missing filters with `-1` for numeric fields and an empty string for text fields.
 
             - **Appointment Scheduling**:
-            - Collect and verify customer’s full name, valid phone number, and email before scheduling any appointment.
+            - Collect and verify customer's full name, valid phone number, and email before scheduling any appointment.
             - Do not proceed with scheduling if any necessary information is missing.
             - Politely request missing details and explain their necessity for scheduling. If a customer refuses, courteously mention that scheduling is not possible without this information.
             - Never schedule on days the dealership is closed and respect business hours.
@@ -216,7 +216,8 @@ def process_chat(user_message, conversation_history):
     completion = client.chat.completions.create(
         model="o3-mini-2025-01-31",
         messages=conversation_history,
-        tools=tools
+        tools=tools,
+        reasoning_effort="low"
     )
     
     message = completion.choices[0].message
@@ -377,7 +378,9 @@ def process_tool_call(conversation_history):
             print("DEBUG: Getting final response from LLM with fallback data")
             completion = client.chat.completions.create(
                 model="o3-mini-2025-01-31",
-                messages=conversation_history
+                messages=conversation_history,
+                max_completion_tokens=1000,
+                reasoning_effort="low"
             )
             message = completion.choices[0].message
             final_response = message.content or ""
@@ -461,7 +464,9 @@ def process_tool_call(conversation_history):
     # Get the final response from the LLM
     completion = client.chat.completions.create(
         model="o3-mini-2025-01-31",
-        messages=conversation_history
+        messages=conversation_history,
+        max_completion_tokens=500,
+        reasoning_effort="low"
     )
     message = completion.choices[0].message
     final_response = message.content or ""
