@@ -1,4 +1,4 @@
-# cors_helpers.py
+# server/helpers/cors_helpers.py
 
 # Importing necessary libraries
 from flask import jsonify, request

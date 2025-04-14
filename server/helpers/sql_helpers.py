@@ -1,3 +1,5 @@
+# server/helpers/sql_helpers.py
+
 import json
 from sqlalchemy import or_
 from flask import g
