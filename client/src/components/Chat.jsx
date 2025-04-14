@@ -6,6 +6,7 @@ import apiClient from '../utils/api';
 import VideoModal from './VideoModal';
 import InventoryDisplay from './InventoryDisplay';
 import './Chat.css';
+import { useNavigate } from 'react-router-dom';
 
 // A simple function to generate a unique ID.
 const generateUniqueId = () => {
@@ -81,6 +82,7 @@ const Chat = () => {
   const [videoResults, setVideoResults] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const navigate = useNavigate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -300,7 +302,7 @@ const Chat = () => {
   };
 
   const handleAnalyticsClick = () => {
-    window.open('/analytics', '_blank');
+    navigate('/analytics');
   };
 
   return (
