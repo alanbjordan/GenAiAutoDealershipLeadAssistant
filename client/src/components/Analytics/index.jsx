@@ -14,38 +14,29 @@ const Analytics = () => {
     requestsByDate: [],
     costByModel: {}
   });
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchAnalyticsData = async () => {
-      try {
-        setLoading(true);
-        const response = await apiClient.get('/analytics/summary');
-        setAnalyticsData(response.data);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching analytics data:', err);
-        setError('Failed to load analytics data. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchAnalyticsData = async () => {
+    try {
+      const response = await apiClient.get('/analytics/summary');
+      setAnalyticsData(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching analytics data:', err);
+      setError('Failed to load analytics data. Please try again later.');
+    }
+  };
 
+  useEffect(() => {
+    // Initial fetch
     fetchAnalyticsData();
-    // Refresh data every 30 seconds
+    
+    // Set up polling interval (every 30 seconds)
     const interval = setInterval(fetchAnalyticsData, 30000);
+    
+    // Cleanup interval on component unmount
     return () => clearInterval(interval);
   }, []);
-
-  if (loading) {
-    return (
-      <div className="analytics-container">
-        <h2>LLM Analytics</h2>
-        <div className="loading">Loading analytics data...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -59,7 +50,6 @@ const Analytics = () => {
   return (
     <div className="analytics-container">
       <h2>LLM Analytics</h2>
-      
       <div className="analytics-content">
         <AnalyticsSummary data={analyticsData} />
         <AnalyticsTable requests={analyticsData.requestsByDate} />
