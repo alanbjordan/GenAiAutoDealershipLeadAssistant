@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from helpers.cors_helpers import pre_authorized_cors_preflight
 from services.analytics_service import store_request_analytics, get_analytics_summary
+from models.sql_models import AnalyticsData
+from database import db
 
 analytics_bp = Blueprint("analytics", __name__)
 
@@ -47,4 +49,20 @@ def get_summary():
         print("DEBUG: Exception encountered in get analytics summary:", e)
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@analytics_bp.route("/analytics/reset", methods=["POST"])
+def reset_analytics():
+    """Reset all analytics data."""
+    try:
+        # Delete all records from the analytics_data table
+        db.session.query(AnalyticsData).delete()
+        db.session.commit()
+        return jsonify({"message": "Analytics data reset successfully"}), 200
+    except Exception as e:
+        print("DEBUG: Exception encountered in reset analytics:", e)
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500 

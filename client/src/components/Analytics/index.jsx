@@ -15,6 +15,7 @@ const Analytics = () => {
     costByModel: {}
   });
   const [error, setError] = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const fetchAnalyticsData = async () => {
     try {
@@ -24,6 +25,26 @@ const Analytics = () => {
     } catch (err) {
       console.error('Error fetching analytics data:', err);
       setError('Failed to load analytics data. Please try again later.');
+    }
+  };
+
+  const handleReset = async () => {
+    try {
+      await apiClient.post('/analytics/reset');
+      // Reset the local state
+      setAnalyticsData({
+        totalCost: 0,
+        totalRequests: 0,
+        averageCostPerRequest: 0,
+        totalSentTokens: 0,
+        totalReceivedTokens: 0,
+        requestsByDate: [],
+        costByModel: {}
+      });
+      setShowResetConfirm(false);
+    } catch (err) {
+      console.error('Error resetting analytics data:', err);
+      setError('Failed to reset analytics data. Please try again later.');
     }
   };
 
@@ -49,7 +70,39 @@ const Analytics = () => {
 
   return (
     <div className="analytics-container">
-      <h2>LLM Analytics</h2>
+      <div className="analytics-header">
+        <h2>LLM Analytics</h2>
+        <button 
+          className="reset-button"
+          onClick={() => setShowResetConfirm(true)}
+        >
+          Reset Data
+        </button>
+      </div>
+
+      {showResetConfirm && (
+        <div className="reset-confirm-dialog">
+          <div className="reset-confirm-content">
+            <h3>Reset Analytics Data</h3>
+            <p>Are you sure you want to reset all analytics data? This action cannot be undone.</p>
+            <div className="reset-confirm-buttons">
+              <button 
+                className="cancel-button"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="confirm-button"
+                onClick={handleReset}
+              >
+                Reset Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="analytics-content">
         <AnalyticsSummary data={analyticsData} />
         <AnalyticsTable requests={analyticsData.requestsByDate} />
