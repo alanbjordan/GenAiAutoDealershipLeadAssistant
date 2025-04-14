@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, send_file
 from helpers.cors_helpers import pre_authorized_cors_preflight
-from services.analytics_service import store_request_analytics, get_analytics_summary
+from services.analytics_service import store_request_analytics
+from services.analytics_helpers import get_analytics_summary
 from models.sql_models import AnalyticsData
 from database import db
 import csv

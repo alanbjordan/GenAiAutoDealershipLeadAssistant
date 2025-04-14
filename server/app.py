@@ -11,9 +11,13 @@ import os
 
 # Import the register_routes function
 from routes.all_routes import register_routes
+from services.websocket_service import init_socketio, socketio
 
 # Create the application instance
 app = create_app()
+
+# Initialize SocketIO
+init_socketio(app)
 
 # Global session handling
 def log_with_timing(prev_time, message):
@@ -57,5 +61,5 @@ app = register_routes(app)
 # Main function to run the application
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"Starting Flask on port {port}")
-    app.run(host="0.0.0.0", port=port, debug=True)
+    print(f"Starting Flask with SocketIO on port {port}")
+    socketio.run(app, host="0.0.0.0", port=port, debug=True)

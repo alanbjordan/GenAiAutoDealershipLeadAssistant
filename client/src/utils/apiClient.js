@@ -1,3 +1,5 @@
+// client/src/utils/apiClient.js
+
 import axios from 'axios';
 
 // API URLs configuration

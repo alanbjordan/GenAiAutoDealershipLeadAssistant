@@ -1,7 +1,10 @@
+// client/src/components/Analytics/index.jsx
+
 import React, { useState, useEffect } from 'react';
 import AnalyticsSummary from './AnalyticsSummary';
 import AnalyticsTable from './AnalyticsTable';
 import apiClient from '../../utils/apiClient';
+import io from 'socket.io-client';
 import './Analytics.css';
 
 const Analytics = () => {
@@ -67,11 +70,42 @@ const Analytics = () => {
     // Initial fetch
     fetchAnalyticsData();
     
-    // Set up polling interval (every 30 seconds)
-    const interval = setInterval(fetchAnalyticsData, 30000);
-    
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
+    // Initialize WebSocket connection
+    const apiUrl = process.env.REACT_APP_API_URL || '';
+    const socketUrl = apiUrl.replace(/^http/, 'ws');
+    const socket = io(socketUrl, {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+
+    // Set up WebSocket event handlers
+    socket.on('connect', () => {
+      console.log('WebSocket connected');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+    });
+
+    socket.on('analytics_summary', (data) => {
+      console.log('Received analytics update:', data);
+      setAnalyticsData(data);
+    });
+
+    socket.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      setError('WebSocket connection error. Falling back to polling.');
+      // Fallback to polling if WebSocket fails
+      const interval = setInterval(fetchAnalyticsData, 30000);
+      return () => clearInterval(interval);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
   }, []);
 
   if (error) {
