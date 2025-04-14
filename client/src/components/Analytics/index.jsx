@@ -48,6 +48,21 @@ const Analytics = () => {
     }
   };
 
+  const handleDownload = async () => {
+    try {
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = `${process.env.REACT_APP_API_URL || ''}/api/analytics/download`;
+      link.setAttribute('download', ''); // This will use the filename from the server
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Error downloading report:', err);
+      setError('Failed to download report. Please try again later.');
+    }
+  };
+
   useEffect(() => {
     // Initial fetch
     fetchAnalyticsData();
@@ -72,12 +87,20 @@ const Analytics = () => {
     <div className="analytics-container">
       <div className="analytics-header">
         <h2>LLM Analytics</h2>
-        <button 
-          className="reset-button"
-          onClick={() => setShowResetConfirm(true)}
-        >
-          Reset Data
-        </button>
+        <div className="header-buttons">
+          <button 
+            className="download-button"
+            onClick={handleDownload}
+          >
+            Download Report
+          </button>
+          <button 
+            className="reset-button"
+            onClick={() => setShowResetConfirm(true)}
+          >
+            Reset Data
+          </button>
+        </div>
       </div>
 
       {showResetConfirm && (

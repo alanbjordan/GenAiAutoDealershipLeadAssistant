@@ -1,8 +1,11 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from helpers.cors_helpers import pre_authorized_cors_preflight
 from services.analytics_service import store_request_analytics, get_analytics_summary
 from models.sql_models import AnalyticsData
 from database import db
+import csv
+import io
+from datetime import datetime
 
 analytics_bp = Blueprint("analytics", __name__)
 
@@ -65,4 +68,57 @@ def reset_analytics():
         import traceback
         traceback.print_exc()
         db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@analytics_bp.route("/analytics/download", methods=["GET"])
+def download_report():
+    """Generate and download analytics report."""
+    try:
+        # Get all analytics data
+        analytics_data = db.session.query(AnalyticsData).order_by(AnalyticsData.date.desc()).all()
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Date',
+            'Model',
+            'Prompt Tokens',
+            'Completion Tokens',
+            'Total Tokens',
+            'Prompt Cost',
+            'Completion Cost',
+            'Total Cost'
+        ])
+        
+        # Write data
+        for record in analytics_data:
+            writer.writerow([
+                record.date.strftime("%Y-%m-%d %H:%M:%S"),
+                record.model,
+                record.prompt_tokens,
+                record.completion_tokens,
+                record.total_tokens,
+                float(record.prompt_cost),
+                float(record.completion_cost),
+                float(record.total_cost)
+            ])
+        
+        # Prepare the response
+        output.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'analytics_report_{timestamp}.csv'
+        )
+
+    except Exception as e:
+        print("DEBUG: Exception encountered in download report:", e)
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500 
