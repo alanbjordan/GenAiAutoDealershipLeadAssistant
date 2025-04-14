@@ -3,7 +3,6 @@
 from datetime import datetime
 from models.sql_models import AnalyticsData
 from database.session import ScopedSession
-from services.websocket_service import emit_analytics_update
 from services.analytics_helpers import get_analytics_summary as get_summary_helper
 
 def store_request_analytics(token_usage, cost_info, model="o3-mini-2025-01-31"):
@@ -36,9 +35,6 @@ def store_request_analytics(token_usage, cost_info, model="o3-mini-2025-01-31"):
         
         # Get the updated analytics summary
         updated_analytics = get_summary_helper()
-        
-        # Emit WebSocket update after successful storage
-        emit_analytics_update()
         
         return True, updated_analytics
     except Exception as e:

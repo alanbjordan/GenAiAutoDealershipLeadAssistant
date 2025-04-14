@@ -18,63 +18,25 @@ const Analytics = () => {
   });
   const [error, setError] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
-  const pollingIntervalRef = useRef(null);
   const lastDataRef = useRef(null);
 
   // Function to fetch analytics data
-  const fetchAnalyticsData = async (isInitialFetch = false) => {
+  const fetchAnalyticsData = async () => {
     try {
-      if (isInitialFetch) {
-        setLoading(true);
-      }
-      
       const response = await apiClient.get('/analytics/summary');
       const newData = response.data;
-      
-      // If this is the initial fetch, just set the data
-      if (isInitialFetch) {
-        setAnalyticsData(newData);
-        lastDataRef.current = newData;
-        setError(null);
-      } else {
-        // For polling updates, compare with previous data and update only what changed
-        updateAnalyticsDataSmoothly(newData);
-      }
+      setAnalyticsData(newData);
+      lastDataRef.current = newData;
+      setError(null);
     } catch (err) {
       console.error('Error fetching analytics data:', err);
-      if (isInitialFetch) {
-        setError('Failed to load analytics data. Please try again later.');
-      }
-    } finally {
-      if (isInitialFetch) {
-        setLoading(false);
-      }
-    }
-  };
-
-  // Function to smoothly update analytics data
-  const updateAnalyticsDataSmoothly = (newData) => {
-    if (!lastDataRef.current) {
-      setAnalyticsData(newData);
-      lastDataRef.current = newData;
-      return;
-    }
-
-    // Check if there are any changes
-    const hasChanges = JSON.stringify(newData) !== JSON.stringify(lastDataRef.current);
-    
-    if (hasChanges) {
-      // Update the data with the new values
-      setAnalyticsData(newData);
-      lastDataRef.current = newData;
+      setError('Failed to load analytics data. Please try again later.');
     }
   };
 
   const handleReset = async () => {
     try {
-      // Immediately clear the data without showing loading state
+      // Immediately clear the data
       const emptyData = {
         totalCost: 0,
         totalRequests: 0,
@@ -104,51 +66,9 @@ const Analytics = () => {
     }
   };
 
-  const handleDownload = async () => {
-    try {
-      // Create a temporary link element
-      const link = document.createElement('a');
-      link.href = `${process.env.REACT_APP_API_URL || ''}/api/analytics/download`;
-      link.setAttribute('download', ''); // This will use the filename from the server
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error('Error downloading report:', err);
-      setError('Failed to download report. Please try again later.');
-    }
-  };
-
-  // Start polling for updates
-  const startPolling = () => {
-    if (!isPolling) {
-      setIsPolling(true);
-      pollingIntervalRef.current = setInterval(() => {
-        fetchAnalyticsData(false);
-      }, 5000); // Poll every 5 seconds
-    }
-  };
-
-  // Stop polling
-  const stopPolling = () => {
-    if (isPolling && pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      setIsPolling(false);
-    }
-  };
-
-  // Initial fetch and setup polling
+  // Initial fetch
   useEffect(() => {
-    // Initial fetch
-    fetchAnalyticsData(true);
-    
-    // Start polling
-    startPolling();
-    
-    // Cleanup on unmount
-    return () => {
-      stopPolling();
-    };
+    fetchAnalyticsData();
   }, []);
 
   if (error) {
@@ -166,10 +86,10 @@ const Analytics = () => {
         <h2>Model Analytics</h2>
         <div className="header-buttons">
           <button 
-            className="download-button"
-            onClick={handleDownload}
+            className="fetch-button"
+            onClick={fetchAnalyticsData}
           >
-            Download Report
+            Fetch Data
           </button>
           <button 
             className="reset-button"
@@ -204,28 +124,8 @@ const Analytics = () => {
       )}
 
       <div className="analytics-content">
-        {loading ? (
-          <>
-            <div className="analytics-summary skeleton">
-              <div className="analytics-card skeleton-card"></div>
-              <div className="analytics-card skeleton-card"></div>
-              <div className="analytics-card skeleton-card"></div>
-              <div className="analytics-card skeleton-card"></div>
-            </div>
-            <div className="analytics-table skeleton">
-              <div className="skeleton-table-header"></div>
-              <div className="skeleton-table-row"></div>
-              <div className="skeleton-table-row"></div>
-              <div className="skeleton-table-row"></div>
-              <div className="skeleton-table-row"></div>
-            </div>
-          </>
-        ) : (
-          <>
-            <AnalyticsSummary data={analyticsData} />
-            <AnalyticsTable requests={analyticsData.requestsByDate} />
-          </>
-        )}
+        <AnalyticsSummary data={analyticsData} />
+        <AnalyticsTable requests={analyticsData.requestsByDate} />
       </div>
     </div>
   );

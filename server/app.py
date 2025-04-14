@@ -11,7 +11,8 @@ import os
 
 # Import the register_routes function
 from routes.all_routes import register_routes
-from services.websocket_service import init_socketio, socketio
+# Remove SocketIO imports
+# from services.websocket_service import init_socketio, socketio
 
 # Create the application instance
 app = create_app()
@@ -19,8 +20,8 @@ app = create_app()
 # Register routes
 register_routes(app)
 
-# Initialize SocketIO
-init_socketio(app)
+# Remove SocketIO initialization
+# init_socketio(app)
 
 # Global session handling
 def log_with_timing(prev_time, message):
@@ -57,4 +58,5 @@ def remove_session(exception=None):
         ScopedSession.remove()
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    # Replace socketio.run with standard Flask run
+    app.run(debug=True)
