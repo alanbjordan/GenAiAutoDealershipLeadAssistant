@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../utils/api';
+import apiClient from '../utils/apiClient';
 import './InventoryDisplay.css';
 
 const InventoryDisplay = () => {

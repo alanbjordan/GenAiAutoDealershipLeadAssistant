@@ -22,7 +22,6 @@ def create_app():
     # Setup CORS configurations
     allowed_origins = os.getenv("CORS_ORIGINS")
 
-
     CORS(
         app,
         supports_credentials=True,

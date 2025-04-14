@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
-import apiClient from '../utils/api';
+import apiClient from '../utils/apiClient';
 import VideoModal from './VideoModal';
 import InventoryDisplay from './InventoryDisplay';
 import './Chat.css';

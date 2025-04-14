@@ -10,6 +10,7 @@ from helpers.llm_utils import (
     detect_end_of_conversation, 
     find_car_review_videos
 )
+from services.analytics_service import store_request_analytics
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -199,6 +200,24 @@ def get_time_context_message():
         "content": f"Current time: {current_time_formatted}"
     }
 
+def calculate_token_cost(prompt_tokens, completion_tokens, model="o3-mini-2025-01-31"):
+    """Calculate the cost of tokens based on the model's pricing."""
+    # Pricing per 1K tokens for o3-mini-2025-01-31
+    PROMPT_COST_PER_1K = 0.0005  # $0.0005 per 1K tokens for input
+    COMPLETION_COST_PER_1K = 0.0015  # $0.0015 per 1K tokens for output
+    
+    prompt_cost = (prompt_tokens / 1000) * PROMPT_COST_PER_1K
+    completion_cost = (completion_tokens / 1000) * COMPLETION_COST_PER_1K
+    
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+        "prompt_cost": prompt_cost,
+        "completion_cost": completion_cost,
+        "total_cost": prompt_cost + completion_cost
+    }
+
 def process_chat(user_message, conversation_history):
     """Process a chat message and return the response."""
     if not user_message:
@@ -232,6 +251,16 @@ def process_chat(user_message, conversation_history):
     )
     
     message = completion.choices[0].message
+    
+    # Calculate token usage and cost
+    token_usage = completion.usage
+    cost_info = calculate_token_cost(
+        prompt_tokens=token_usage.prompt_tokens,
+        completion_tokens=token_usage.completion_tokens
+    )
+    
+    # Store analytics data
+    store_request_analytics(token_usage, cost_info)
     
     # Check if a tool call was triggered
     tool_call_detected = False
@@ -296,7 +325,13 @@ def process_chat(user_message, conversation_history):
         "chat_response": assistant_response,
         "conversation_history": conversation_history,
         "tool_call_detected": tool_call_detected,
-        "summary": summary
+        "summary": summary,
+        "token_usage": {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens
+        },
+        "cost": cost_info
     }, 200
 
 def process_tool_call(conversation_history):
@@ -379,6 +414,16 @@ def process_tool_call(conversation_history):
             final_response = message.content or ""
             print("DEBUG: Final response from LLM with fallback data:", final_response)
             
+            # Calculate token usage and cost for the fallback response
+            token_usage = completion.usage
+            cost_info = calculate_token_cost(
+                prompt_tokens=token_usage.prompt_tokens,
+                completion_tokens=token_usage.completion_tokens
+            )
+            
+            # Store analytics data
+            store_request_analytics(token_usage, cost_info)
+            
             # Append the final response to the conversation history
             conversation_history.append({
                 "role": "assistant",
@@ -401,16 +446,19 @@ def process_tool_call(conversation_history):
                 
                 # Generate the summary
                 summary = generate_conversation_summary(conversation_history, conversation_id)
-                print("DEBUG: Summary generated:", summary)
             
             return {
                 "final_response": final_response,
                 "final_conversation_history": conversation_history,
-                "summary": summary
+                "summary": summary,
+                "token_usage": {
+                    "prompt_tokens": token_usage.prompt_tokens,
+                    "completion_tokens": token_usage.completion_tokens,
+                    "total_tokens": token_usage.total_tokens
+                },
+                "cost": cost_info
             }, 200
-        else:
-            return {"error": "No tool call found in conversation history"}, 400
-
+    
     # Process each tool call
     for tool_call in tool_call_message["tool_calls"]:
         func_name = tool_call["function"]["name"]
@@ -449,6 +497,16 @@ def process_tool_call(conversation_history):
     message = completion.choices[0].message
     final_response = message.content or ""
 
+    # Calculate token usage and cost for the final response
+    token_usage = completion.usage
+    cost_info = calculate_token_cost(
+        prompt_tokens=token_usage.prompt_tokens,
+        completion_tokens=token_usage.completion_tokens
+    )
+    
+    # Store analytics data
+    store_request_analytics(token_usage, cost_info)
+
     # Append the final response to the conversation history
     conversation_history.append({
         "role": "assistant",
@@ -470,11 +528,17 @@ def process_tool_call(conversation_history):
         
         # Generate the summary
         summary = generate_conversation_summary(conversation_history, conversation_id)
-
+    
     return {
         "final_response": final_response,
         "final_conversation_history": conversation_history,
-        "summary": summary
+        "summary": summary,
+        "token_usage": {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens
+        },
+        "cost": cost_info
     }, 200
 
 def generate_summary(conversation_history, conversation_id=None):

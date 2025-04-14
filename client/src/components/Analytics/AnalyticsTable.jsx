@@ -16,16 +16,21 @@ const AnalyticsTable = ({ requests }) => {
           </tr>
         </thead>
         <tbody>
-          {requests.slice(0, 10).map((request, index) => (
-            <tr key={index}>
-              <td>{request.date}</td>
-              <td>{request.model}</td>
-              <td>{request.sentTokens.toLocaleString()}</td>
-              <td>{request.receivedTokens.toLocaleString()}</td>
-              <td>{(request.sentTokens + request.receivedTokens).toLocaleString()}</td>
-              <td>${request.cost.toFixed(4)}</td>
-            </tr>
-          ))}
+          {requests.slice(0, 10).map((request, index) => {
+            // Ensure cost is a number
+            const cost = typeof request.cost === 'number' ? request.cost : 0;
+            
+            return (
+              <tr key={index}>
+                <td>{request.date}</td>
+                <td>{request.model}</td>
+                <td>{request.sentTokens.toLocaleString()}</td>
+                <td>{request.receivedTokens.toLocaleString()}</td>
+                <td>{(request.sentTokens + request.receivedTokens).toLocaleString()}</td>
+                <td>${cost.toFixed(4)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
