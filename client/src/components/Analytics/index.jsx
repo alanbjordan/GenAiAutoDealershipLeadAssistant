@@ -86,7 +86,7 @@ const Analytics = () => {
   return (
     <div className="analytics-container">
       <div className="analytics-header">
-        <h2>LLM Analytics</h2>
+        <h2>Model Analytics</h2>
         <div className="header-buttons">
           <button 
             className="download-button"

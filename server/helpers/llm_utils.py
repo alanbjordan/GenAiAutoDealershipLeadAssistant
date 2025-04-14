@@ -2,6 +2,13 @@ from database import db
 from models.sql_models import CarInventory, ConversationSummary, AutoLeadInteractionDetails
 import json
 import uuid
+from openai import OpenAI
+from helpers.token_utils import calculate_token_cost
+from services.analytics_service import store_request_analytics
+import os
+
+# Initialize the OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def fetch_cars(filter_params: dict) -> list:
     """
@@ -71,18 +78,15 @@ def fetch_cars(filter_params: dict) -> list:
 
 def generate_conversation_summary(conversation_history: list, conversation_id: str = None) -> dict:
     """
-    Generate a summary of the conversation using OpenAI's API.
+    Generate a summary for a conversation using the OpenAI API.
     
-    :param conversation_history: List of message objects in the conversation
-    :param conversation_id: Optional ID for the conversation. If not provided, a new one will be generated.
-    :return: Dictionary containing the summary information
+    Args:
+        conversation_history (list): List of conversation messages
+        conversation_id (str, optional): ID of the conversation
+        
+    Returns:
+        dict: Summary of the conversation
     """
-    from openai import OpenAI
-    import os
-    
-    # Initialize the OpenAI client
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    
     # Generate a conversation ID if not provided
     if not conversation_id:
         conversation_id = str(uuid.uuid4())
@@ -143,6 +147,16 @@ def generate_conversation_summary(conversation_history: list, conversation_id: s
         
         # Add the conversation ID to the summary
         summary_json["conversation_id"] = conversation_id
+        
+        # Calculate token usage and cost
+        token_usage = response.usage
+        cost_info = calculate_token_cost(
+            prompt_tokens=token_usage.prompt_tokens,
+            completion_tokens=token_usage.completion_tokens
+        )
+        
+        # Store analytics data for summary generation
+        store_request_analytics(token_usage, cost_info, model="o3-mini-2025-01-31")
         
         # Save the summary to the database
         save_summary_to_db(summary_json)

@@ -10,6 +10,7 @@ from helpers.llm_utils import (
     detect_end_of_conversation, 
     find_car_review_videos
 )
+from helpers.token_utils import calculate_token_cost
 from services.analytics_service import store_request_analytics
 
 # Initialize the OpenAI client
@@ -198,24 +199,6 @@ def get_time_context_message():
     return {
         "role": "system",
         "content": f"Current time: {current_time_formatted}"
-    }
-
-def calculate_token_cost(prompt_tokens, completion_tokens, model="o3-mini-2025-01-31"):
-    """Calculate the cost of tokens based on the model's pricing."""
-    # Pricing per 1K tokens for o3-mini-2025-01-31
-    PROMPT_COST_PER_1K = 0.0005  # $0.0005 per 1K tokens for input
-    COMPLETION_COST_PER_1K = 0.0015  # $0.0015 per 1K tokens for output
-    
-    prompt_cost = (prompt_tokens / 1000) * PROMPT_COST_PER_1K
-    completion_cost = (completion_tokens / 1000) * COMPLETION_COST_PER_1K
-    
-    return {
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": prompt_tokens + completion_tokens,
-        "prompt_cost": prompt_cost,
-        "completion_cost": completion_cost,
-        "total_cost": prompt_cost + completion_cost
     }
 
 def process_chat(user_message, conversation_history):
