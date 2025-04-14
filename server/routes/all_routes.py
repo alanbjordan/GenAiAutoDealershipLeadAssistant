@@ -126,7 +126,7 @@ def chat():
             "content": (
                 """ 
                 You are Patricia, a knowledgeable and friendly customer support agent at Nissan of Hendersonville, a family-owned and operated Nissan dealership in Hendersonville, North Carolina.
-                
+                IF YOU GET A MESSAGE IN A NON ENGLISH LANGUAGE RESPONSE IN THE LANAGUAGE THE USER IS SPEAKING
                 IMPORTANT: You must ONLY provide information that is explicitly stated in this system message. DO NOT make up or guess any information about the dealership, including:
                 - Business hours
                 - Address
@@ -604,3 +604,31 @@ def car_review_videos():
     except Exception as e:
         print(f"Error in car_review_videos endpoint: {str(e)}")
         return jsonify({"videos": [], "error": str(e)}), 500
+
+@pre_authorized_cors_preflight
+@all_routes_bp.route("/inventory", methods=["GET"])
+def get_inventory():
+    try:
+        # Query all cars from the inventory
+        cars = CarInventory.query.all()
+        
+        # Convert the cars to a list of dictionaries
+        inventory = []
+        for car in cars:
+            inventory.append({
+                'id': car.id,
+                'stock_number': car.stock_number,
+                'vin': car.vin,
+                'make': car.make,
+                'model': car.model,
+                'year': car.year,
+                'price': float(car.price),
+                'mileage': car.mileage,
+                'color': car.color,
+                'description': car.description
+            })
+        
+        return jsonify(inventory)
+    except Exception as e:
+        print(f"Error fetching inventory: {str(e)}")
+        return jsonify({"error": "Failed to fetch inventory"}), 500

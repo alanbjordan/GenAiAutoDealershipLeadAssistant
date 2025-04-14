@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import apiClient from '../utils/api';
 import VideoModal from './VideoModal';
+import InventoryDisplay from './InventoryDisplay';
 import './Chat.css';
 
 // A simple function to generate a unique ID.
@@ -300,6 +301,7 @@ const Chat = () => {
 
   return (
     <div className="chat-container">
+      <InventoryDisplay />
       <div className="chat-header">
         <h2>Nissan of Hendersonville Chat</h2>
       </div>
