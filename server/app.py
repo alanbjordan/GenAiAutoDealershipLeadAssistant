@@ -9,10 +9,8 @@ from database.session import ScopedSession
 from datetime import datetime, timezone
 import os
 
-
-
-# Import Blueprints
-from routes.all_routes import all_routes_bp
+# Import the register_routes function
+from routes.all_routes import register_routes
 
 # Create the application instance
 app = create_app()
@@ -53,9 +51,8 @@ def remove_session(exception=None):
     else:
         t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] No session found.")
 
-# Registering Blueprints
-app.register_blueprint(all_routes_bp, url_prefix="/api")
-
+# Register all blueprints using the register_routes function
+app = register_routes(app)
 
 # Main function to run the application
 if __name__ == "__main__":
