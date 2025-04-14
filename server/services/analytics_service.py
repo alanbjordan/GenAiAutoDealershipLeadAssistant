@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from models.sql_models import AnalyticsData
-from database import db
+from database.session import ScopedSession
 from services.websocket_service import emit_analytics_update
 from services.analytics_helpers import get_analytics_summary as get_summary_helper
 
@@ -31,17 +31,20 @@ def store_request_analytics(token_usage, cost_info, model="o3-mini-2025-01-31"):
             completion_cost=cost_info["completion_cost"],
             total_cost=cost_info["total_cost"]
         )
-        db.session.add(analytics)
-        db.session.commit()
+        ScopedSession.add(analytics)
+        ScopedSession.commit()
+        
+        # Get the updated analytics summary
+        updated_analytics = get_summary_helper()
         
         # Emit WebSocket update after successful storage
         emit_analytics_update()
         
-        return True
+        return True, updated_analytics
     except Exception as e:
         print(f"Error storing analytics data: {e}")
-        db.session.rollback()
-        return False
+        ScopedSession.rollback()
+        return False, None
 
 # The get_analytics_summary function has been moved to analytics_helpers.py
 # This function is kept for backward compatibility

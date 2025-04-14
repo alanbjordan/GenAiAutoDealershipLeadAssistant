@@ -1,25 +1,26 @@
 from datetime import datetime
 from models.sql_models import AnalyticsData
-from database import db
+from database.session import ScopedSession
+from sqlalchemy import func
 
 def get_analytics_summary():
     """Get summary of analytics data."""
     try:
         # Get total cost
-        total_cost = db.session.query(db.func.sum(AnalyticsData.total_cost)).scalar() or 0
+        total_cost = ScopedSession.query(func.sum(AnalyticsData.total_cost)).scalar() or 0
         
         # Get total requests
-        total_requests = db.session.query(db.func.count(AnalyticsData.id)).scalar() or 0
+        total_requests = ScopedSession.query(func.count(AnalyticsData.id)).scalar() or 0
         
         # Calculate average cost per request
         average_cost = total_cost / total_requests if total_requests > 0 else 0
         
         # Get total tokens
-        total_sent_tokens = db.session.query(db.func.sum(AnalyticsData.prompt_tokens)).scalar() or 0
-        total_received_tokens = db.session.query(db.func.sum(AnalyticsData.completion_tokens)).scalar() or 0
+        total_sent_tokens = ScopedSession.query(func.sum(AnalyticsData.prompt_tokens)).scalar() or 0
+        total_received_tokens = ScopedSession.query(func.sum(AnalyticsData.completion_tokens)).scalar() or 0
         
         # Get recent requests
-        recent_requests = db.session.query(AnalyticsData).order_by(AnalyticsData.date.desc()).limit(10).all()
+        recent_requests = ScopedSession.query(AnalyticsData).order_by(AnalyticsData.date.desc()).limit(10).all()
         
         # Format recent requests
         requests_by_date = [{
@@ -32,9 +33,9 @@ def get_analytics_summary():
         
         # Get cost by model
         cost_by_model = {}
-        model_costs = db.session.query(
+        model_costs = ScopedSession.query(
             AnalyticsData.model,
-            db.func.sum(AnalyticsData.total_cost).label('total_cost')
+            func.sum(AnalyticsData.total_cost).label('total_cost')
         ).group_by(AnalyticsData.model).all()
         
         for model, cost in model_costs:

@@ -62,7 +62,7 @@ const TypingIndicator = () => (
   </div>
 );
 
-const Chat = () => {
+const Chat = ({ analyticsData, updateAnalytics }) => {
   const [messages, setMessages] = useState([
     { 
       id: generateUniqueId(), 
@@ -151,10 +151,15 @@ const Chat = () => {
       };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response, conversation_history: updatedHistory, tool_call_detected, summary: newSummary } = response.data;
+      const { chat_response, conversation_history: updatedHistory, tool_call_detected, summary: newSummary, analytics: updatedAnalytics } = response.data;
       
       // Store the updated conversation history
       setConversationHistory(updatedHistory);
+
+      // Update analytics data if available
+      if (updatedAnalytics) {
+        updateAnalytics(updatedAnalytics);
+      }
 
       // Check if a tool call was detected
       if (tool_call_detected) {
@@ -176,10 +181,15 @@ const Chat = () => {
         });
         
         // Get the final response after the tool call
-        const { final_response, final_conversation_history, summary: toolCallSummary } = toolCallResponse.data;
+        const { final_response, final_conversation_history, summary: toolCallSummary, analytics: toolCallAnalytics } = toolCallResponse.data;
         
         // Update the conversation history
         setConversationHistory(final_conversation_history);
+        
+        // Update analytics data if available
+        if (toolCallAnalytics) {
+          updateAnalytics(toolCallAnalytics);
+        }
         
         // Add the final response as a message
         const finalMessage = { 
@@ -199,7 +209,7 @@ const Chat = () => {
           setShowSummary(true);
         }
       } else {
-        // No tool call, just add the response as a message
+        // Add the bot's response as a message
         const botMessage = { 
           id: generateUniqueId(), 
           sender: 'bot', 
@@ -219,11 +229,10 @@ const Chat = () => {
       const errorMessage = { 
         id: generateUniqueId(), 
         sender: 'bot', 
-        text: 'Sorry, something went wrong. Please try again later.',
+        text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}`,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
-      setToolCallInProgress(false);
     } finally {
       setLoading(false);
     }

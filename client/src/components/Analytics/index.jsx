@@ -1,10 +1,9 @@
 // client/src/components/Analytics/index.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AnalyticsSummary from './AnalyticsSummary';
 import AnalyticsTable from './AnalyticsTable';
 import apiClient from '../../utils/apiClient';
-import io from 'socket.io-client';
 import './Analytics.css';
 
 const Analytics = () => {
@@ -19,23 +18,64 @@ const Analytics = () => {
   });
   const [error, setError] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef(null);
+  const lastDataRef = useRef(null);
 
-  const fetchAnalyticsData = async () => {
+  // Function to fetch analytics data
+  const fetchAnalyticsData = async (isInitialFetch = false) => {
     try {
+      if (isInitialFetch) {
+        setLoading(true);
+      }
+      
       const response = await apiClient.get('/analytics/summary');
-      setAnalyticsData(response.data);
-      setError(null);
+      const newData = response.data;
+      
+      // If this is the initial fetch, just set the data
+      if (isInitialFetch) {
+        setAnalyticsData(newData);
+        lastDataRef.current = newData;
+        setError(null);
+      } else {
+        // For polling updates, compare with previous data and update only what changed
+        updateAnalyticsDataSmoothly(newData);
+      }
     } catch (err) {
       console.error('Error fetching analytics data:', err);
-      setError('Failed to load analytics data. Please try again later.');
+      if (isInitialFetch) {
+        setError('Failed to load analytics data. Please try again later.');
+      }
+    } finally {
+      if (isInitialFetch) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Function to smoothly update analytics data
+  const updateAnalyticsDataSmoothly = (newData) => {
+    if (!lastDataRef.current) {
+      setAnalyticsData(newData);
+      lastDataRef.current = newData;
+      return;
+    }
+
+    // Check if there are any changes
+    const hasChanges = JSON.stringify(newData) !== JSON.stringify(lastDataRef.current);
+    
+    if (hasChanges) {
+      // Update the data with the new values
+      setAnalyticsData(newData);
+      lastDataRef.current = newData;
     }
   };
 
   const handleReset = async () => {
     try {
-      await apiClient.post('/analytics/reset');
-      // Reset the local state
-      setAnalyticsData({
+      // Immediately clear the data without showing loading state
+      const emptyData = {
         totalCost: 0,
         totalRequests: 0,
         averageCostPerRequest: 0,
@@ -43,8 +83,21 @@ const Analytics = () => {
         totalReceivedTokens: 0,
         requestsByDate: [],
         costByModel: {}
-      });
+      };
+      
+      // Update the UI immediately with empty data
+      setAnalyticsData(emptyData);
+      lastDataRef.current = emptyData;
       setShowResetConfirm(false);
+      
+      // Then make the API call in the background
+      const response = await apiClient.post('/analytics/reset');
+      
+      // Update with the actual reset data from the server
+      if (response.data && response.data.analytics) {
+        setAnalyticsData(response.data.analytics);
+        lastDataRef.current = response.data.analytics;
+      }
     } catch (err) {
       console.error('Error resetting analytics data:', err);
       setError('Failed to reset analytics data. Please try again later.');
@@ -66,45 +119,35 @@ const Analytics = () => {
     }
   };
 
+  // Start polling for updates
+  const startPolling = () => {
+    if (!isPolling) {
+      setIsPolling(true);
+      pollingIntervalRef.current = setInterval(() => {
+        fetchAnalyticsData(false);
+      }, 5000); // Poll every 5 seconds
+    }
+  };
+
+  // Stop polling
+  const stopPolling = () => {
+    if (isPolling && pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      setIsPolling(false);
+    }
+  };
+
+  // Initial fetch and setup polling
   useEffect(() => {
     // Initial fetch
-    fetchAnalyticsData();
+    fetchAnalyticsData(true);
     
-    // Initialize WebSocket connection
-    const apiUrl = process.env.REACT_APP_API_URL || '';
-    const socketUrl = apiUrl.replace(/^http/, 'ws');
-    const socket = io(socketUrl, {
-      transports: ['websocket'],
-      path: '/socket.io'
-    });
-
-    // Set up WebSocket event handlers
-    socket.on('connect', () => {
-      console.log('WebSocket connected');
-    });
-
-    socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-    });
-
-    socket.on('analytics_summary', (data) => {
-      console.log('Received analytics update:', data);
-      setAnalyticsData(data);
-    });
-
-    socket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-      setError('WebSocket connection error. Falling back to polling.');
-      // Fallback to polling if WebSocket fails
-      const interval = setInterval(fetchAnalyticsData, 30000);
-      return () => clearInterval(interval);
-    });
-
+    // Start polling
+    startPolling();
+    
     // Cleanup on unmount
     return () => {
-      if (socket) {
-        socket.disconnect();
-      }
+      stopPolling();
     };
   }, []);
 
@@ -161,8 +204,28 @@ const Analytics = () => {
       )}
 
       <div className="analytics-content">
-        <AnalyticsSummary data={analyticsData} />
-        <AnalyticsTable requests={analyticsData.requestsByDate} />
+        {loading ? (
+          <>
+            <div className="analytics-summary skeleton">
+              <div className="analytics-card skeleton-card"></div>
+              <div className="analytics-card skeleton-card"></div>
+              <div className="analytics-card skeleton-card"></div>
+              <div className="analytics-card skeleton-card"></div>
+            </div>
+            <div className="analytics-table skeleton">
+              <div className="skeleton-table-header"></div>
+              <div className="skeleton-table-row"></div>
+              <div className="skeleton-table-row"></div>
+              <div className="skeleton-table-row"></div>
+              <div className="skeleton-table-row"></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <AnalyticsSummary data={analyticsData} />
+            <AnalyticsTable requests={analyticsData.requestsByDate} />
+          </>
+        )}
       </div>
     </div>
   );

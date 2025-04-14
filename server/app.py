@@ -16,6 +16,9 @@ from services.websocket_service import init_socketio, socketio
 # Create the application instance
 app = create_app()
 
+# Register routes
+register_routes(app)
+
 # Initialize SocketIO
 init_socketio(app)
 
@@ -48,18 +51,10 @@ def remove_session(exception=None):
             t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] Exception detected. Rolling back session.")
             session.rollback()
         else:
-            t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] No exception. Committing session.")
+            t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] Committing session.")
             session.commit()
+        t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] Removing session from registry.")
         ScopedSession.remove()
-        t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] Session removed.")
-    else:
-        t = log_with_timing(t, "[GLOBAL TEARDOWN_REQUEST] No session found.")
 
-# Register all blueprints using the register_routes function
-app = register_routes(app)
-
-# Main function to run the application
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"Starting Flask with SocketIO on port {port}")
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+if __name__ == '__main__':
+    socketio.run(app, debug=True)

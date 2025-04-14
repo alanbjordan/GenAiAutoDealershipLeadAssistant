@@ -14,6 +14,8 @@
   --input-border: #e2e8f0;
   --shadow-color: rgba(0, 0, 0, 0.1);
   --header-height: 60px;
+  --skeleton-base: #e2e8f0;
+  --skeleton-highlight: #f8fafc;
 }
 
 body {
@@ -303,4 +305,47 @@ body {
 .download-button:hover {
   background-color: var(--background-color);
   transform: translateY(-1px);
+}
+
+/* Skeleton Loading Styles */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    to right,
+    var(--skeleton-base) 4%,
+    var(--skeleton-highlight) 25%,
+    var(--skeleton-base) 36%
+  );
+  background-size: 1000px 100%;
+}
+
+.skeleton-card {
+  height: 120px;
+  border-radius: var(--border-radius);
+  margin-bottom: 0;
+}
+
+.skeleton-table-header {
+  height: 48px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+
+.skeleton-table-row {
+  height: 40px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.skeleton-table-row:last-child {
+  margin-bottom: 0;
 }
