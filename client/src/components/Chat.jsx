@@ -299,11 +299,23 @@ const Chat = () => {
     return <ReactMarkdown>{message.text}</ReactMarkdown>;
   };
 
+  const handleAnalyticsClick = () => {
+    window.open('/analytics', '_blank');
+  };
+
   return (
     <div className="chat-container">
-      <InventoryDisplay />
       <div className="chat-header">
         <h2>Nissan of Hendersonville Chat</h2>
+        <div className="header-buttons">
+          <InventoryDisplay />
+          <button 
+            className="analytics-button"
+            onClick={handleAnalyticsClick}
+          >
+            View Analytics
+          </button>
+        </div>
       </div>
       
       {showSummary && summary && (

@@ -47,7 +47,7 @@ const InventoryDisplay = () => {
   }, [searchTerm, inventory]);
 
   return (
-    <div className="inventory-display">
+    <>
       <button 
         className="inventory-button"
         onClick={() => setIsModalOpen(true)}
@@ -112,7 +112,7 @@ const InventoryDisplay = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

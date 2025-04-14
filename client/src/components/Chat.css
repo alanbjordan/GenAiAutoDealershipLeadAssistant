@@ -40,7 +40,7 @@
     box-shadow: 0 2px 4px var(--shadow-color);
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
 }
 
 .chat-header h2 {
@@ -48,6 +48,30 @@
     font-size: 1.25rem;
     font-weight: 600;
     letter-spacing: 0.5px;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.analytics-button,
+.inventory-button {
+    background-color: var(--secondary-color);
+    color: var(--primary-color);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s ease;
+    font-weight: 600;
+}
+
+.analytics-button:hover,
+.inventory-button:hover {
+    background-color: var(--background-color);
 }
 
 .chat-messages {
@@ -101,6 +125,10 @@
     background: var(--bot-message-bg);
     color: var(--bot-message-color);
     text-align: left;
+}
+
+.chat-message.bot .message-timestamp {
+    color: var(--bot-message-color);
 }
 
 .chat-input-container {
