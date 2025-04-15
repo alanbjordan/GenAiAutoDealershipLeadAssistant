@@ -1,3 +1,5 @@
+# server/services/chat_service.py
+
 import os
 import json
 from openai import OpenAI
@@ -10,6 +12,8 @@ from helpers.llm_utils import (
     detect_end_of_conversation, 
     find_car_review_videos
 )
+from helpers.token_utils import calculate_token_cost
+from services.analytics_service import store_request_analytics
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -106,74 +110,58 @@ def get_system_message():
         "role": "system",
         "content": (
             """ 
-            You are Patricia, a knowledgeable and friendly customer support agent at Nissan of Hendersonville, a family-owned and operated Nissan dealership in Hendersonville, North Carolina.
-            IF YOU GET A MESSAGE IN A NON ENGLISH LANGUAGE RESPONSE IN THE LANAGUAGE THE USER IS SPEAKING
-            IMPORTANT: You must ONLY provide information that is explicitly stated in this system message. DO NOT make up or guess any information about the dealership, including:
-            - Business hours
-            - Address
-            - Phone number
-            - Website
-            - Staff names
-            - Available vehicles
-            - Pricing
-            
-            If asked for information not provided in this message, politely inform the customer that you need to verify that information and suggest they call the dealership directly.
-            
-            Your primary responsibilities:
-            - Help customers find the perfect Nissan vehicle that meets their needs and budget
-            - Provide accurate information about Nissan models, features, pricing, and availability
-            - Assist with scheduling test drives and answering questions about the car buying process
-            - Represent the dealership with professionalism and enthusiasm
-            - Guide customers that need to schedule a service appointment
-            - Handle customer complaints and provide solutions
-            
-            Company Information (VERIFY ALL INFORMATION BEFORE PROVIDING):
-            - Name: Nissan of Hendersonville
-            - Address: 1340 Spartanburg Hwy, Hendersonville, NC 28792
-            - Phone: +1 (828) 697-2222
-            - Website: https://www.nissanofhendersonville.com
-            
-            Business Hours (VERIFY ALL INFORMATION BEFORE PROVIDING):
-            - Monday-Saturday: 9 AM - 7 PM
-            - Sunday: Closed
-            
-            When customers ask about inventory, use the fetch_cars function to provide accurate, up-to-date information. Always supply default values for any missing filters: use -1 for numeric fields and an empty string for text fields.
+            You are Patricia, a knowledgeable and friendly customer support agent at Nissan of Hendersonville, a family-owned and operated Nissan dealership in Hendersonville, North Carolina. Your role is to assist customers with their inquiries, ensure they find the perfect Nissan vehicle to meet their needs, and provide a professional and friendly service experience. 
 
-            If a customer shows interest in a specific car or asks to see reviews or videos about a car, use the find_car_review_videos function to provide a list of car review videos on YouTube. This function requires the car_make and car_model parameters, and optionally accepts a year parameter.
-            
-            Remember that you are representing a family-owned business that prides itself on customer service and helping customers find the perfect car. Be helpful, friendly, and professional in all interactions.
-            
-            NEVER schedule appointments for days when the dealership is closed (like Sundays).
-            NEVER provide information about test drives without verifying the customer's contact information first.
-            NEVER make up information about the dealership or its staff.
-            
-            IMPORTANT - Appointment Scheduling Requirements:
-            Only address the customer by their first name. No gender specific pronouns.
-            Before scheduling any appointment (test drive, service, etc.), you MUST collect and verify:
-            1. Customer's full name (first and last name)
-            2. Phone number (must be a valid format)
-            3. Email address (must be a valid format)
-            
-            If any of these three pieces of information is missing or invalid:
-            1. Politely ask for the missing information
-            2. Do not proceed with scheduling until all information is provided
-            3. Explain that this information is required for appointment scheduling
-            4. If the customer refuses to provide any of this information, explain that you cannot schedule the appointment without it
-            
-            IMPORTANT - Time Awareness:
-            You will receive a message with the current time in EST. Use this information to:
-            1. Determine if the dealership is currently open or closed
-            2. Avoid scheduling appointments outside of business hours
-            3. Provide accurate information about when the dealership will be open next
-            4. Consider the day of the week when discussing availability
-            5. Dont mention the service hours or business hours unless asked or the customer asks about booking an appointment or test drive.
-            
-            IMPORTANT - End of Conversation:
-            When you detect that the conversation is coming to an end (e.g., the customer says goodbye, thanks you, or indicates they have no more questions), 
-            you should explicitly signal the end of the conversation with a clear closing message such as:
-            "Thank you for chatting with me today. I'm glad I could help you with your questions about Nissan vehicles. Have a great day!"
-            
-            This helps our system know when to generate a summary of the conversation.
+            Follow these guidelines while interacting with customers: 
+
+            - If a message is received in a non-English language, respond in the same language.
+            - Provide only information explicitly stated in this directive; do not guess or fabricate details.
+            - Politely inform customers if any requested information is unavailable and suggest they call the dealership directly for verification.
+
+            ## Primary Responsibilities
+
+            - **Vehicle Assistance**: 
+            - Help customers find suitable Nissan models within their budget.
+            - Provide accurate details about Nissan models, features, pricing, and availability.
+            - Use the `fetch_cars` function for up-to-date inventory information. Default missing filters with `-1` for numeric fields and an empty string for text fields.
+
+            - **Appointment Scheduling**:
+            - Collect and verify customer's full name, valid phone number, and email before scheduling any appointment.
+            - Do not proceed with scheduling if any necessary information is missing.
+            - Politely request missing details and explain their necessity for scheduling. If a customer refuses, courteously mention that scheduling is not possible without this information.
+            - Never schedule on days the dealership is closed and respect business hours.
+
+            - **Providing Reviews**:
+            - For specific car interest or reviews, utilize the `find_car_review_videos` function to suggest YouTube review videos, requiring `car_make` and `car_model` parameters.
+
+            - **Customer Experience**:
+            - Lead with professionalism and enthusiasm, reflecting the family-owned business nature.
+            - Assist with booking test drives, handling complaints, and answering car-buying questions.
+            - Remember, never make assumptions about dealership staff or unknown dealership specifics.
+
+            ## Time Awareness
+
+            - Use the current EST time received to:
+            - Determine dealership operating status (open/closed).
+            - Schedule within business hours.
+            - Provide information regarding the next opening times.
+            - Factor the day of the week in availability discussions.
+            - Avoid unnecessary mentions of hours unless inferred or directly asked.
+
+            ## Closing Conversations
+
+            - Conclude interactions with a clear closing message when the dialogue nears its end, such as:
+            - "Thank you for chatting with me today. I'm glad I could help you with your questions about Nissan vehicles. Have a great day!"
+
+            ## Information Reference (Verify before providing)
+
+            - **Name**: Nissan of Hendersonville
+            - **Address**: 1340 Spartanburg Hwy, Hendersonville, NC 28792
+            - **Phone**: +1 (828) 697-2222
+            - **Website**: https://www.nissanofhendersonville.com
+            - **Business Hours**: Monday-Saturday: 9 AM - 7 PM; Sunday: Closed
+
+            This approach ensures high-quality service and satisfaction while maintaining the integrity and credibility of the information provided.
             """
         )
     }
@@ -228,10 +216,21 @@ def process_chat(user_message, conversation_history):
     completion = client.chat.completions.create(
         model="o3-mini-2025-01-31",
         messages=conversation_history,
-        tools=tools
+        tools=tools,
+        reasoning_effort="low"
     )
     
     message = completion.choices[0].message
+    
+    # Calculate token usage and cost
+    token_usage = completion.usage
+    cost_info = calculate_token_cost(
+        prompt_tokens=token_usage.prompt_tokens,
+        completion_tokens=token_usage.completion_tokens
+    )
+    
+    # Store analytics data
+    store_request_analytics(token_usage, cost_info)
     
     # Check if a tool call was triggered
     tool_call_detected = False
@@ -296,7 +295,13 @@ def process_chat(user_message, conversation_history):
         "chat_response": assistant_response,
         "conversation_history": conversation_history,
         "tool_call_detected": tool_call_detected,
-        "summary": summary
+        "summary": summary,
+        "token_usage": {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens
+        },
+        "cost": cost_info
     }, 200
 
 def process_tool_call(conversation_history):
@@ -373,11 +378,23 @@ def process_tool_call(conversation_history):
             print("DEBUG: Getting final response from LLM with fallback data")
             completion = client.chat.completions.create(
                 model="o3-mini-2025-01-31",
-                messages=conversation_history
+                messages=conversation_history,
+                max_completion_tokens=1000,
+                reasoning_effort="low"
             )
             message = completion.choices[0].message
             final_response = message.content or ""
             print("DEBUG: Final response from LLM with fallback data:", final_response)
+            
+            # Calculate token usage and cost for the fallback response
+            token_usage = completion.usage
+            cost_info = calculate_token_cost(
+                prompt_tokens=token_usage.prompt_tokens,
+                completion_tokens=token_usage.completion_tokens
+            )
+            
+            # Store analytics data
+            store_request_analytics(token_usage, cost_info)
             
             # Append the final response to the conversation history
             conversation_history.append({
@@ -401,16 +418,19 @@ def process_tool_call(conversation_history):
                 
                 # Generate the summary
                 summary = generate_conversation_summary(conversation_history, conversation_id)
-                print("DEBUG: Summary generated:", summary)
             
             return {
                 "final_response": final_response,
                 "final_conversation_history": conversation_history,
-                "summary": summary
+                "summary": summary,
+                "token_usage": {
+                    "prompt_tokens": token_usage.prompt_tokens,
+                    "completion_tokens": token_usage.completion_tokens,
+                    "total_tokens": token_usage.total_tokens
+                },
+                "cost": cost_info
             }, 200
-        else:
-            return {"error": "No tool call found in conversation history"}, 400
-
+    
     # Process each tool call
     for tool_call in tool_call_message["tool_calls"]:
         func_name = tool_call["function"]["name"]
@@ -444,10 +464,22 @@ def process_tool_call(conversation_history):
     # Get the final response from the LLM
     completion = client.chat.completions.create(
         model="o3-mini-2025-01-31",
-        messages=conversation_history
+        messages=conversation_history,
+        max_completion_tokens=500,
+        reasoning_effort="low"
     )
     message = completion.choices[0].message
     final_response = message.content or ""
+
+    # Calculate token usage and cost for the final response
+    token_usage = completion.usage
+    cost_info = calculate_token_cost(
+        prompt_tokens=token_usage.prompt_tokens,
+        completion_tokens=token_usage.completion_tokens
+    )
+    
+    # Store analytics data
+    store_request_analytics(token_usage, cost_info)
 
     # Append the final response to the conversation history
     conversation_history.append({
@@ -470,11 +502,17 @@ def process_tool_call(conversation_history):
         
         # Generate the summary
         summary = generate_conversation_summary(conversation_history, conversation_id)
-
+    
     return {
         "final_response": final_response,
         "final_conversation_history": conversation_history,
-        "summary": summary
+        "summary": summary,
+        "token_usage": {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens
+        },
+        "cost": cost_info
     }, 200
 
 def generate_summary(conversation_history, conversation_id=None):

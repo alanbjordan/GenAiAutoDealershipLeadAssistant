@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
-import apiClient from '../utils/api';
+import apiClient from '../utils/apiClient';
 import VideoModal from './VideoModal';
 import InventoryDisplay from './InventoryDisplay';
 import './Chat.css';
+import { useNavigate } from 'react-router-dom';
 
 // A simple function to generate a unique ID.
 const generateUniqueId = () => {
@@ -61,7 +62,7 @@ const TypingIndicator = () => (
   </div>
 );
 
-const Chat = () => {
+const Chat = ({ analyticsData, updateAnalytics }) => {
   const [messages, setMessages] = useState([
     { 
       id: generateUniqueId(), 
@@ -81,6 +82,7 @@ const Chat = () => {
   const [videoResults, setVideoResults] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const navigate = useNavigate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -149,10 +151,15 @@ const Chat = () => {
       };
 
       const response = await apiClient.post('/chat', payload);
-      const { chat_response, conversation_history: updatedHistory, tool_call_detected, summary: newSummary } = response.data;
+      const { chat_response, conversation_history: updatedHistory, tool_call_detected, summary: newSummary, analytics: updatedAnalytics } = response.data;
       
       // Store the updated conversation history
       setConversationHistory(updatedHistory);
+
+      // Update analytics data if available
+      if (updatedAnalytics) {
+        updateAnalytics(updatedAnalytics);
+      }
 
       // Check if a tool call was detected
       if (tool_call_detected) {
@@ -174,10 +181,15 @@ const Chat = () => {
         });
         
         // Get the final response after the tool call
-        const { final_response, final_conversation_history, summary: toolCallSummary } = toolCallResponse.data;
+        const { final_response, final_conversation_history, summary: toolCallSummary, analytics: toolCallAnalytics } = toolCallResponse.data;
         
         // Update the conversation history
         setConversationHistory(final_conversation_history);
+        
+        // Update analytics data if available
+        if (toolCallAnalytics) {
+          updateAnalytics(toolCallAnalytics);
+        }
         
         // Add the final response as a message
         const finalMessage = { 
@@ -197,7 +209,7 @@ const Chat = () => {
           setShowSummary(true);
         }
       } else {
-        // No tool call, just add the response as a message
+        // Add the bot's response as a message
         const botMessage = { 
           id: generateUniqueId(), 
           sender: 'bot', 
@@ -217,11 +229,10 @@ const Chat = () => {
       const errorMessage = { 
         id: generateUniqueId(), 
         sender: 'bot', 
-        text: 'Sorry, something went wrong. Please try again later.',
+        text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}`,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
-      setToolCallInProgress(false);
     } finally {
       setLoading(false);
     }
@@ -299,11 +310,23 @@ const Chat = () => {
     return <ReactMarkdown>{message.text}</ReactMarkdown>;
   };
 
+  const handleAnalyticsClick = () => {
+    navigate('/analytics');
+  };
+
   return (
     <div className="chat-container">
-      <InventoryDisplay />
       <div className="chat-header">
         <h2>Nissan of Hendersonville Chat</h2>
+        <div className="header-buttons">
+          <InventoryDisplay />
+          <button 
+            className="analytics-button"
+            onClick={handleAnalyticsClick}
+          >
+            View Analytics
+          </button>
+        </div>
       </div>
       
       {showSummary && summary && (

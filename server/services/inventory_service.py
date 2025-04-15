@@ -1,3 +1,5 @@
+# server/services/inventory_service.py
+
 from models.sql_models import CarInventory
 from helpers.llm_utils import fetch_cars, find_car_review_videos
 
